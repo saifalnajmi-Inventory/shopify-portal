@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-slate-200 p-5;
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors;
+  }
+  .btn-primary {
+    @apply btn bg-indigo-600 text-white hover:bg-indigo-700;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-slate-700 border border-slate-300 hover:bg-slate-50;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700;
+  }
+  .btn-success {
+    @apply btn bg-emerald-600 text-white hover:bg-emerald-700;
+  }
+  .btn-warning {
+    @apply btn bg-amber-500 text-white hover:bg-amber-600;
+  }
+  .input {
+    @apply w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent;
+  }
+  .select {
+    @apply input bg-white appearance-none pr-8;
+  }
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-green  { @apply badge bg-emerald-50 text-emerald-700; }
+  .badge-red    { @apply badge bg-red-50 text-red-700; }
+  .badge-yellow { @apply badge bg-yellow-50 text-yellow-700; }
+  .badge-blue   { @apply badge bg-blue-50 text-blue-700; }
+  .badge-gray   { @apply badge bg-slate-100 text-slate-600; }
+  .badge-purple { @apply badge bg-purple-50 text-purple-700; }
+
+  /* Table */
+  .tbl { @apply w-full text-sm; }
+  .tbl th { @apply text-left text-xs font-semibold text-slate-500 uppercase tracking-wide py-3 px-3 bg-slate-50 border-b border-slate-200; }
+  .tbl td { @apply py-3 px-3 border-b border-slate-100 text-slate-700; }
+  .tbl tr:hover td { @apply bg-slate-50; }
+}
+
+/* Score bar */
+.score-bar { height: 6px; border-radius: 3px; background: #e2e8f0; }
+.score-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+/* Sidebar active */
+.nav-active { @apply bg-indigo-50 text-indigo-700 font-semibold; }

@@ -1,0 +1,284 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Shopify Entities ──────────────────────────────────────────────────────────
+
+model Product {
+  id               String    @id           // Shopify product GID / numeric id as string
+  title            String
+  handle           String
+  status           String                  // active | draft | archived
+  productType      String?
+  vendor           String?
+  tags             String?                 // comma-separated
+  bodyHtml         String?
+  seoTitle         String?
+  seoDescription   String?
+  imageCount       Int       @default(0)
+  firstImageSrc    String?
+  createdAtShopify DateTime
+  updatedAtShopify DateTime
+  publishedAt      DateTime?
+  syncedAt         DateTime  @default(now())
+
+  variants     Variant[]
+  collections  ProductCollection[]
+  draftChanges DraftChange[]
+  restockRules RestockRule[]
+}
+
+model Variant {
+  id                String    @id           // Shopify variant id as string
+  productId         String
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  title             String
+  sku               String?
+  barcode           String?
+  price             Float
+  compareAtPrice    Float?
+  inventoryItemId   String    @unique
+  inventoryQuantity Int       @default(0)
+  option1           String?
+  option2           String?
+  option3           String?
+  weight            Float?
+  weightUnit        String?
+
+  // Computed / enriched fields (updated after sync)
+  firstOutOfStockAt DateTime?             // set when qty first hits 0
+  lastSoldAt        DateTime?
+  totalSold         Int       @default(0)
+  sold30Days        Int       @default(0)
+  sold7Days         Int       @default(0)
+  restockScore      Float?
+  marketingScore    Float?
+  syncedAt          DateTime  @default(now())
+
+  inventoryLevels InventoryLevel[]
+  orderLineItems  OrderLineItem[]
+  draftChanges    DraftChange[]
+  restockRule     RestockRule?
+}
+
+model InventoryLevel {
+  id           String   @id @default(cuid())
+  variantId    String
+  variant      Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  locationId   String
+  locationName String?
+  available    Int
+  updatedAt    DateTime @updatedAt
+
+  @@unique([variantId, locationId])
+}
+
+model Location {
+  id     String  @id
+  name   String
+  active Boolean @default(true)
+}
+
+// ─── Orders ────────────────────────────────────────────────────────────────────
+
+model Order {
+  id                String    @id
+  orderNumber       Int
+  email             String?
+  totalPrice        Float
+  financialStatus   String
+  fulfillmentStatus String?
+  createdAt         DateTime
+  processedAt       DateTime?
+  cancelledAt       DateTime?
+
+  lineItems OrderLineItem[]
+}
+
+model OrderLineItem {
+  id           String   @id
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId    String?
+  variant      Variant? @relation(fields: [variantId], references: [id])
+  productId    String?
+  title        String
+  variantTitle String?
+  quantity     Int
+  price        Float
+  sku          String?
+  createdAt    DateTime?
+}
+
+// ─── Collections ───────────────────────────────────────────────────────────────
+
+model Collection {
+  id     String @id
+  title  String
+  handle String
+
+  products ProductCollection[]
+}
+
+model ProductCollection {
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@id([productId, collectionId])
+}
+
+// ─── Change Management ─────────────────────────────────────────────────────────
+
+model DraftChange {
+  id          String    @id @default(cuid())
+  productId   String?
+  product     Product?  @relation(fields: [productId], references: [id])
+  variantId   String?
+  variant     Variant?  @relation(fields: [variantId], references: [id])
+  entityType  String                    // product | variant
+  entityName  String
+  variantName String?
+  sku         String?
+  fieldName   String                    // inventory_quantity | status | title | price …
+  beforeValue String?
+  afterValue  String?
+  changeType  String                    // inventory | status | price | title | description | sku | barcode | vendor | type | tags | seo_title | seo_description | compare_at_price
+  status      String    @default("pending")  // pending | approved | pushed | failed | discarded
+  errorMessage String?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  approvedAt  DateTime?
+  pushedAt    DateTime?
+  notes       String?
+}
+
+model ChangeLog {
+  id              String   @id @default(cuid())
+  draftChangeId   String?
+  entityType      String
+  entityId        String
+  entityName      String
+  fieldName       String
+  beforeValue     String?
+  afterValue      String?
+  changeType      String
+  status          String                // success | failed
+  errorMessage    String?
+  pushedBy        String?
+  pushedAt        DateTime @default(now())
+  shopifyResponse String?
+}
+
+// ─── Sync Tracking ─────────────────────────────────────────────────────────────
+
+model SyncLog {
+  id            String    @id @default(cuid())
+  syncType      String                  // full | products | orders | inventory
+  status        String                  // running | success | failed
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  productsCount Int?
+  variantsCount Int?
+  ordersCount   Int?
+  errorMessage  String?
+}
+
+// ─── Auto-Restock Rules ────────────────────────────────────────────────────────
+
+model RestockRule {
+  id              String    @id @default(cuid())
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId       String?
+  variant         Variant?  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  productTitle    String
+  variantTitle    String?
+  sku             String?
+  threshold       Int       @default(10)   // trigger when qty < threshold
+  restockTo       Int       @default(10)   // restock to this quantity
+  autoRestock     Boolean   @default(false)// push to Shopify automatically
+  enabled         Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  lastPushStatus  String?                  // success | failed | pending
+  lastPushError   String?
+  triggerCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([variantId])                   // one rule per variant
+}
+
+// ─── Notifications ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id          String    @id @default(cuid())
+  type        String    // low_stock|auto_restock|push_success|push_failed|oos|back_in_stock|missing_image|missing_seo|sync_failed|manual_review|custom_request|update_available
+  severity    String    @default("info")  // info | warning | critical
+  productId   String?
+  productName String?
+  variantName String?
+  sku         String?
+  message     String
+  oldValue    String?
+  newValue    String?
+  status      String    @default("unread")// unread | read | resolved
+  actionType  String?                    // push_inventory | open_product | view_changes
+  actionData  String?                    // JSON payload for action button
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime  @default(now())
+}
+
+// ─── Global Settings ───────────────────────────────────────────────────────────
+
+model GlobalSetting {
+  key       String   @id   // e.g. restock_threshold, restock_target, auto_push_enabled
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Auth / RBAC ───────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  name         String?
+  passwordHash String
+  role         String    @default("viewer")   // super_admin | client_admin | manager | viewer
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLoginAt  DateTime?
+
+  sessions     Session[]
+  auditLogs    AuditLog[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  username  String?
+  action    String   // login | logout | push_inventory | sync | create_user | delete_user | change_role
+  detail    String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
