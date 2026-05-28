@@ -17,7 +17,7 @@ import {
   updateProduct,
   updateVariant,
   setInventoryLevel,
-  fetchLocationForInventoryItem,
+  fetchAllLocationsForInventoryItem,
 } from '../../../lib/shopify'
 
 // Fields that live on the Shopify product resource
@@ -47,7 +47,7 @@ async function handler(req, res) {
       variant: {
         select: {
           inventoryItemId: true,
-          inventoryLevels: { take: 1, select: { locationId: true } },
+          inventoryLevels: { select: { locationId: true } }, // ALL locations
         },
       },
     },
@@ -70,17 +70,30 @@ async function handler(req, res) {
         const inventoryItemId = change.variant?.inventoryItemId
         if (!inventoryItemId) throw new Error('Variant has no inventoryItemId — re-sync from Shopify first.')
 
-        // Try stored location first, then fetch live from Shopify
-        let locationId = change.variant?.inventoryLevels?.[0]?.locationId
-        if (!locationId) {
-          locationId = await fetchLocationForInventoryItem(inventoryItemId)
+        // Collect all location IDs from DB; fall back to live Shopify fetch
+        let locationIds = (change.variant?.inventoryLevels || []).map(l => l.locationId).filter(Boolean)
+        if (!locationIds.length) {
+          locationIds = await fetchAllLocationsForInventoryItem(inventoryItemId)
         }
+        if (!locationIds.length) throw new Error('No Shopify location found for this variant.')
 
         const newQty = parseInt(change.afterValue, 10)
         if (isNaN(newQty)) throw new Error(`Invalid quantity: "${change.afterValue}"`)
 
-        const resp = await setInventoryLevel({ inventoryItemId, locationId, available: newQty })
-        shopifyResponse = JSON.stringify(resp)
+        // Push to EVERY location
+        let lastResp = null
+        for (const locationId of locationIds) {
+          const resp = await setInventoryLevel({ inventoryItemId, locationId, available: newQty })
+          lastResp = resp
+          if (change.variantId) {
+            await db.inventoryLevel.upsert({
+              where:  { variantId_locationId: { variantId: change.variantId, locationId } },
+              update: { available: newQty },
+              create: { variantId: change.variantId, locationId, available: newQty },
+            })
+          }
+        }
+        shopifyResponse = JSON.stringify(lastResp)
 
         // Reflect locally
         if (change.variantId) {
@@ -90,12 +103,6 @@ async function handler(req, res) {
               inventoryQuantity: newQty,
               firstOutOfStockAt: newQty === 0 ? new Date() : null,
             },
-          })
-          // Also store the resolved location in inventory levels table
-          await db.inventoryLevel.upsert({
-            where:  { variantId_locationId: { variantId: change.variantId, locationId } },
-            update: { available: newQty },
-            create: { variantId: change.variantId, locationId, available: newQty },
           })
         }
 

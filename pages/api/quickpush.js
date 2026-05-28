@@ -13,7 +13,7 @@ import { withAuth } from '../../lib/auth'
 import logger from '../../lib/logger'
 import {
   updateProduct, updateVariant,
-  setInventoryLevel, fetchLocationForInventoryItem,
+  setInventoryLevel, fetchAllLocationsForInventoryItem,
 } from '../../lib/shopify'
 
 const PRODUCT_FIELDS = new Set([
@@ -67,27 +67,37 @@ async function handler(req, res) {
     if (fieldName === 'inventory_quantity') {
       const variant = await db.variant.findUnique({
         where:   { id: variantId },
-        include: { inventoryLevels: { take: 1 } },
+        include: { inventoryLevels: true },          // ALL locations, not just first
       })
       if (!variant?.inventoryItemId) throw new Error('Variant not found — sync first.')
 
-      let locationId = variant.inventoryLevels?.[0]?.locationId
-      if (!locationId) locationId = await fetchLocationForInventoryItem(variant.inventoryItemId)
+      // Collect all location IDs we have in the DB
+      let locationIds = (variant.inventoryLevels || []).map(l => l.locationId).filter(Boolean)
+      // If none stored yet (pre-read_locations sync), fetch them live from Shopify
+      if (!locationIds.length) {
+        locationIds = await fetchAllLocationsForInventoryItem(variant.inventoryItemId)
+      }
+      if (!locationIds.length) throw new Error('No Shopify location found for this variant.')
 
       const newQty = parseInt(afterValue, 10)
       if (isNaN(newQty) || newQty < 0) throw new Error(`Invalid quantity: "${afterValue}"`)
 
-      const resp = await setInventoryLevel({ inventoryItemId: variant.inventoryItemId, locationId, available: newQty })
-      shopifyResponse = JSON.stringify(resp)
+      // Push to EVERY location so the storefront always reflects the update
+      let lastResp = null
+      for (const locationId of locationIds) {
+        const resp = await setInventoryLevel({ inventoryItemId: variant.inventoryItemId, locationId, available: newQty })
+        lastResp = resp
+        await db.inventoryLevel.upsert({
+          where:  { variantId_locationId: { variantId, locationId } },
+          update: { available: newQty },
+          create: { variantId, locationId, available: newQty },
+        })
+      }
+      shopifyResponse = JSON.stringify(lastResp)
 
       await db.variant.update({
         where: { id: variantId },
         data: { inventoryQuantity: newQty, firstOutOfStockAt: newQty === 0 ? new Date() : null },
-      })
-      await db.inventoryLevel.upsert({
-        where:  { variantId_locationId: { variantId, locationId } },
-        update: { available: newQty },
-        create: { variantId, locationId, available: newQty },
       })
 
     } else if (PRODUCT_FIELDS.has(fieldName)) {
