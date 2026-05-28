@@ -78,8 +78,8 @@ export default function DrillDownPanel({ card, title, onClose, onRefreshDashboar
   const showing = items.length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] sm:max-h-[85vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
@@ -272,33 +272,35 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
   const isPushingStatus = statusAction !== null
 
   return (
-    <div className="px-5 py-3.5 hover:bg-slate-50 transition-colors">
-      <div className="flex items-center gap-3">
+    <div className="px-4 py-3 hover:bg-slate-50 transition-colors">
+
+      {/* ── Top row: rank + image + product info ─────────────────────────── */}
+      <div className="flex items-start gap-3">
         {/* Rank */}
-        <span className="text-xs font-bold text-slate-300 w-6 text-center shrink-0">{rank}</span>
+        <span className="text-xs font-bold text-slate-300 w-5 text-center shrink-0 pt-1">{rank}</span>
 
         {/* Image */}
         {item.image
-          ? <img src={item.image} alt="" className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0" onError={e => e.target.style.display='none'} />
-          : <div className="w-11 h-11 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-              <Package size={16} className="text-slate-300" />
+          ? <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" onError={e => e.target.style.display='none'} />
+          : <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+              <Package size={15} className="text-slate-300" />
             </div>
         }
 
-        {/* Product info */}
+        {/* Product info — takes all remaining width */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-slate-800 truncate leading-snug">
+            <span className="text-sm font-semibold text-slate-800 leading-snug">
               {item.productTitle}
             </span>
             {item.status && <StatusBadge status={item.status} />}
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
             {item.variantTitle && item.variantTitle !== 'Default Title' && (
               <span className="text-xs text-slate-400">{item.variantTitle}</span>
             )}
             {item.sku && (
-              <span className="text-xs text-slate-400 font-mono">SKU: {item.sku}</span>
+              <span className="text-xs text-slate-400 font-mono">SKU:{item.sku}</span>
             )}
             {item.sold30Days > 0 && (
               <span className="text-xs text-indigo-500 font-medium">{item.sold30Days} sold/30d</span>
@@ -309,90 +311,71 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
             {item.totalSold === 0 && (
               <span className="text-xs text-slate-300 italic">No sales</span>
             )}
-            {/* ── Restock rule badge ──────────────────────────────────────── */}
             {item.hasRestockRule && item.restockRule && (
               <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-300 px-1.5 py-0.5 rounded font-bold leading-none">
                 <Zap size={8} />
-                {'<'}{item.restockRule.threshold} → {item.restockRule.restockTo}
-                {item.restockRule.autoRestock && (
-                  <span className="text-emerald-600 ml-0.5">auto</span>
-                )}
+                {'<'}{item.restockRule.threshold}→{item.restockRule.restockTo}
+                {item.restockRule.autoRestock && <span className="text-emerald-600 ml-0.5">auto</span>}
               </span>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Stock badge (hide on pure status cards to save space) */}
+      {/* ── Bottom row: stock badge + action buttons ─────────────────────── */}
+      <div className="mt-2 ml-8 flex items-center gap-2 flex-wrap">
+
+        {/* Stock badge */}
         {!isStatusCard && (
-          <div className={clsx('shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border', stockColor)}>
+          <div className={clsx('text-xs font-bold px-2.5 py-1 rounded-lg border shrink-0', stockColor)}>
             {item.currentQty <= 0 ? '0 · OOS' : `${item.currentQty} left`}
           </div>
         )}
 
-        {/* ── Action buttons ─────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Status action buttons */}
+        {isPushingStatus ? (
+          <span className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+            <Loader2 size={13} className="animate-spin" /> Updating…
+          </span>
+        ) : (
+          <>
+            {item.status === 'draft' && (
+              <button className="btn-success py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('active')}>
+                <Eye size={13} /> Publish
+              </button>
+            )}
+            {item.status === 'active' && (
+              <button className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('draft')}>
+                <EyeOff size={13} /> Set Draft
+              </button>
+            )}
+            {item.status === 'archived' && (
+              <button className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('draft')}>
+                <Archive size={13} /> Unarchive
+              </button>
+            )}
+          </>
+        )}
 
-          {/* Status toggle buttons */}
-          {isPushingStatus ? (
-            <span className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
-              <Loader2 size={13} className="animate-spin" />
-              Updating…
-            </span>
-          ) : (
-            <>
-              {item.status === 'draft' && (
-                <button
-                  className="btn-success py-1.5 px-3 text-xs flex items-center gap-1.5"
-                  onClick={() => changeProductStatus('active')}
-                  title="Publish to store"
-                >
-                  <Eye size={13} /> Publish
-                </button>
-              )}
-              {item.status === 'active' && (
-                <button
-                  className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5"
-                  onClick={() => changeProductStatus('draft')}
-                  title="Move to draft"
-                >
-                  <EyeOff size={13} /> Set Draft
-                </button>
-              )}
-              {item.status === 'archived' && (
-                <button
-                  className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5"
-                  onClick={() => changeProductStatus('draft')}
-                  title="Unarchive to draft"
-                >
-                  <Archive size={13} /> Unarchive
-                </button>
-              )}
-            </>
-          )}
+        {/* Rule shortcut */}
+        {pushStatus === 'idle' && !editing && !isPushingStatus && (
+          <RestockRuleButton item={item} />
+        )}
 
-          {/* Auto-restock rule shortcut */}
-          {pushStatus === 'idle' && !editing && !isPushingStatus && (
-            <RestockRuleButton item={item} />
-          )}
-
-          {/* Stock update button (always shown for non-status-card cards, or as secondary on status cards) */}
-          {pushStatus === 'idle' && !editing && (
-            <button
-              className={clsx(
-                'py-1.5 px-3 text-xs shrink-0',
-                isStatusCard ? 'btn-secondary' : 'btn-primary'
-              )}
-              onClick={() => { setEditing(true); setNewQty(String(Math.max(0, item.currentQty))) }}
-            >
-              {isStatusCard ? `${item.currentQty} stock` : 'Update Stock'}
-            </button>
-          )}
-        </div>
+        {/* Stock update button */}
+        {pushStatus === 'idle' && !editing && (
+          <button
+            className={clsx('py-1.5 px-3 text-xs shrink-0', isStatusCard ? 'btn-secondary' : 'btn-primary')}
+            onClick={() => { setEditing(true); setNewQty(String(Math.max(0, item.currentQty))) }}
+          >
+            {isStatusCard ? `${item.currentQty} stock` : 'Update Stock'}
+          </button>
+        )}
       </div>
 
       {/* Inline stock edit */}
       {editing && pushStatus === 'idle' && (
-        <div className="mt-2 ml-16 flex items-center gap-2 flex-wrap">
+        <div className="mt-2 ml-8 flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-2 bg-white border-2 border-indigo-300 rounded-xl px-3 py-2 shadow-sm">
             <span className="text-xs text-slate-400 font-medium whitespace-nowrap">New stock:</span>
             <input
@@ -410,7 +393,7 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
             <span className="text-xs text-slate-400">units</span>
           </div>
           <button className="btn-success py-2 px-4 text-sm font-semibold flex items-center gap-2" onClick={pushStock}>
-            <Send size={14} /> Push to Shopify
+            <Send size={14} /> Push
           </button>
           <button className="btn-secondary py-2 px-3 text-sm" onClick={() => { setEditing(false); setNewQty('') }}>
             Cancel
@@ -418,23 +401,18 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
         </div>
       )}
 
-      {/* Pushing stock */}
       {pushStatus === 'pushing' && (
-        <div className="mt-2 ml-16 flex items-center gap-2 text-sm text-indigo-600 font-medium">
+        <div className="mt-2 ml-8 flex items-center gap-2 text-sm text-indigo-600 font-medium">
           <Loader2 size={15} className="animate-spin" /> Pushing to Shopify…
         </div>
       )}
-
-      {/* Stock success */}
       {pushStatus === 'success' && (
-        <div className="mt-2 ml-16 flex items-center gap-2 text-sm text-emerald-600 font-semibold">
-          <CheckCircle2 size={15} /> Updated to {newQty} units — live on Shopify ✓
+        <div className="mt-2 ml-8 flex items-center gap-2 text-sm text-emerald-600 font-semibold">
+          <CheckCircle2 size={15} /> Updated to {newQty} units ✓
         </div>
       )}
-
-      {/* Stock failed */}
       {pushStatus === 'failed' && (
-        <div className="mt-2 ml-16 space-y-1">
+        <div className="mt-2 ml-8 space-y-1">
           <div className="flex items-center gap-2 text-sm text-red-600">
             <XCircle size={14} /> Push failed: {errMsg}
           </div>
