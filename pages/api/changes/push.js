@@ -37,7 +37,7 @@ async function handler(req, res) {
   const { ids } = req.body || {}
 
   const where = {
-    status: 'approved',
+    status: { in: ['pending', 'approved'] },
     ...(ids?.length ? { id: { in: ids } } : {}),
   }
 

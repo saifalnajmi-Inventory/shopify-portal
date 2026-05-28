@@ -29,14 +29,14 @@ const STATUS_ICONS = {
 }
 
 export default function ReviewChanges({ changes, onRefresh }) {
-  const [selected,  setSelected]  = useState(new Set())
-  const [pushing,   setPushing]   = useState(false)
+  const [selected,    setSelected]    = useState(new Set())
+  const [pushing,     setPushing]     = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
-  const pending  = changes.filter(c => c.status === 'pending')
-  const approved = changes.filter(c => c.status === 'approved')
-  const pushed   = changes.filter(c => c.status === 'pushed')
-  const failed   = changes.filter(c => c.status === 'failed')
+  // Actionable = pending or previously-approved (retry)
+  const actionable = changes.filter(c => ['pending', 'approved'].includes(c.status))
+  const pushed     = changes.filter(c => c.status === 'pushed')
+  const failed     = changes.filter(c => c.status === 'failed')
 
   function toggleSelect(id) {
     setSelected(prev => {
@@ -54,20 +54,6 @@ export default function ReviewChanges({ changes, onRefresh }) {
     }
   }
 
-  async function approveSelected() {
-    if (!selected.size) return
-    const res = await fetch('/api/changes', {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ ids: [...selected], action: 'approve' }),
-    })
-    if (res.ok) {
-      toast.success(`${selected.size} change(s) approved`)
-      setSelected(new Set())
-      onRefresh()
-    }
-  }
-
   async function discardSelected() {
     if (!selected.size) return
     const res = await fetch('/api/changes', {
@@ -82,17 +68,21 @@ export default function ReviewChanges({ changes, onRefresh }) {
     }
   }
 
+  // IDs to push: selected ones if any, otherwise all actionable
+  const pushIds = selected.size > 0
+    ? [...selected].filter(id => actionable.some(c => c.id === id))
+    : actionable.map(c => c.id)
+
   async function pushToShopify() {
     setShowConfirm(false)
     setPushing(true)
-    const approvedIds = approved.map(c => c.id)
-    const tid = toast.loading(`Pushing ${approvedIds.length} changes to Shopify…`)
+    const tid = toast.loading(`Pushing ${pushIds.length} change(s) to Shopify…`)
 
     try {
       const res  = await fetch('/api/changes/push', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ ids: approvedIds }),
+        body:    JSON.stringify({ ids: pushIds }),
       })
       const data = await res.json()
 
@@ -100,8 +90,9 @@ export default function ReviewChanges({ changes, onRefresh }) {
       if (data.failed > 0) {
         toast.error(`${data.pushed} pushed · ${data.failed} failed — check Change Log`)
       } else {
-        toast.success(`All ${data.pushed} changes pushed to Shopify!`)
+        toast.success(`All ${data.pushed} change(s) pushed to Shopify!`)
       }
+      setSelected(new Set())
       onRefresh()
     } catch (e) {
       toast.error(e.message, { id: tid })
@@ -113,12 +104,11 @@ export default function ReviewChanges({ changes, onRefresh }) {
   return (
     <div className="space-y-6">
       {/* ── Summary strip ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Pending Review', count: pending.length,  color: 'bg-amber-50   text-amber-700'  },
-          { label: 'Approved',       count: approved.length, color: 'bg-indigo-50  text-indigo-700' },
-          { label: 'Pushed',         count: pushed.length,   color: 'bg-emerald-50 text-emerald-700' },
-          { label: 'Failed',         count: failed.length,   color: 'bg-red-50     text-red-700'    },
+          { label: 'Pending',  count: actionable.length, color: 'bg-amber-50   text-amber-700'   },
+          { label: 'Pushed',   count: pushed.length,     color: 'bg-emerald-50 text-emerald-700' },
+          { label: 'Failed',   count: failed.length,     color: 'bg-red-50     text-red-700'     },
         ].map(({ label, count, color }) => (
           <div key={label} className={clsx('card text-center', color)}>
             <div className="text-2xl font-bold">{count}</div>
@@ -128,32 +118,27 @@ export default function ReviewChanges({ changes, onRefresh }) {
       </div>
 
       {/* ── Action toolbar ─────────────────────────────────────────────────── */}
-      {(pending.length > 0 || approved.length > 0) && (
+      {actionable.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 card py-3">
           {selected.size > 0 && (
             <>
               <span className="text-sm text-slate-500">{selected.size} selected</span>
-              <button className="btn-primary" onClick={approveSelected}>
-                <CheckCircle2 size={15} /> Approve Selected
-              </button>
               <button className="btn-danger" onClick={discardSelected}>
                 <XCircle size={15} /> Discard Selected
               </button>
             </>
           )}
 
-          {approved.length > 0 && (
-            <button
-              className="btn-success ml-auto"
-              onClick={() => setShowConfirm(true)}
-              disabled={pushing}
-            >
-              {pushing
-                ? <><Loader2 size={15} className="animate-spin" /> Pushing…</>
-                : <><CheckCircle2 size={15} /> Push {approved.length} Approved → Shopify</>
-              }
-            </button>
-          )}
+          <button
+            className="btn-success ml-auto"
+            onClick={() => setShowConfirm(true)}
+            disabled={pushing || pushIds.length === 0}
+          >
+            {pushing
+              ? <><Loader2 size={15} className="animate-spin" /> Pushing…</>
+              : <><CheckCircle2 size={15} /> Push {pushIds.length} Change{pushIds.length !== 1 ? 's' : ''} → Shopify</>
+            }
+          </button>
         </div>
       )}
 
@@ -167,7 +152,7 @@ export default function ReviewChanges({ changes, onRefresh }) {
               </div>
               <h3 className="font-bold text-slate-800 text-lg">Push to Shopify?</h3>
               <p className="text-slate-500 text-sm mt-1">
-                You are about to push <strong>{approved.length} approved changes</strong> to your live Shopify store.
+                You are about to push <strong>{pushIds.length} change{pushIds.length !== 1 ? 's' : ''}</strong> to your live Shopify store.
                 This action cannot be automatically undone.
               </p>
             </div>
@@ -176,7 +161,7 @@ export default function ReviewChanges({ changes, onRefresh }) {
                 Cancel
               </button>
               <button className="btn-success flex-1" onClick={pushToShopify}>
-                Confirm Push
+                Yes, Push Now
               </button>
             </div>
           </div>
@@ -194,16 +179,10 @@ export default function ReviewChanges({ changes, onRefresh }) {
           <div className="flex items-center gap-3 px-1">
             <input
               type="checkbox"
-              onChange={() => {
-                const actionable = changes.filter(c => ['pending','approved'].includes(c.status))
-                toggleAll(actionable.map(c => c.id))
-              }}
-              checked={
-                changes.filter(c => ['pending','approved'].includes(c.status)).length > 0 &&
-                changes.filter(c => ['pending','approved'].includes(c.status)).every(c => selected.has(c.id))
-              }
+              onChange={() => toggleAll(actionable.map(c => c.id))}
+              checked={actionable.length > 0 && actionable.every(c => selected.has(c.id))}
             />
-            <span className="text-xs text-slate-400 font-medium">Select all actionable</span>
+            <span className="text-xs text-slate-400 font-medium">Select all · deselect to push all</span>
           </div>
 
           {changes.map(c => (

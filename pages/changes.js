@@ -2,7 +2,7 @@
  * Review Changes — before/after diff table with approve, discard, push.
  */
 import { useState, useEffect } from 'react'
-import { RefreshCw, GitPullRequest } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import ReviewChanges from '../components/ReviewChanges'
 
 export default function ChangesPage() {
@@ -37,16 +37,6 @@ export default function ChangesPage() {
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
-      </div>
-
-      {/* Safety notice */}
-      <div className="flex gap-3 items-start p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-        <GitPullRequest size={18} className="shrink-0 mt-0.5 text-amber-600" />
-        <div>
-          <strong>Safe Push Workflow:</strong> Changes are never sent to Shopify automatically.
-          Review the Before / After columns carefully, approve the ones you want, then click
-          <strong> Push to Shopify</strong>. Failed pushes keep the "failed" status so you can retry.
-        </div>
       </div>
 
       {/* Tab selector */}
