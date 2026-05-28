@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, GitPullRequest, History,
   RefreshCw, Store, Menu, X, Bell, Zap, Settings,
   CheckCircle2, Clock, AlertCircle, Wifi, Users,
-  LogOut, ShieldCheck, Shield, User, Eye,
+  LogOut, ShieldCheck, Shield, User, Eye, KeyRound,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -40,10 +40,11 @@ export default function Layout({ children }) {
   const router = useRouter()
   const { user, authLoading } = useAuth()
 
-  const [syncing,     setSyncing]     = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [syncInfo,    setSyncInfo]    = useState(null)
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [syncing,        setSyncing]        = useState(false)
+  const [sidebarOpen,    setSidebarOpen]    = useState(false)
+  const [syncInfo,       setSyncInfo]       = useState(null)
+  const [unreadCount,    setUnreadCount]    = useState(0)
+  const [showChangePw,   setShowChangePw]   = useState(false)
   const pollRef = useRef(null)
 
   const isAdminOrCA = user?.role === 'super_admin' || user?.role === 'client_admin'
@@ -255,18 +256,101 @@ export default function Layout({ children }) {
                 })()}
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="shrink-0 text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-lg hover:bg-red-50"
-              title="Sign out"
-            >
-              <LogOut size={15} />
-            </button>
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => setShowChangePw(true)}
+                className="shrink-0 text-slate-400 hover:text-indigo-600 transition-colors p-1.5 rounded-lg hover:bg-indigo-50"
+                title="Change password"
+              >
+                <KeyRound size={15} />
+              </button>
+              <button
+                onClick={handleLogout}
+                className="shrink-0 text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-lg hover:bg-red-50"
+                title="Sign out"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
           </div>
         </div>
       )}
     </aside>
   )
+
+  // ── Change Password modal ────────────────────────────────────────────────────
+  function ChangePasswordModal({ user, onClose }) {
+    const [current,  setCurrent]  = useState('')
+    const [next,     setNext]     = useState('')
+    const [confirm,  setConfirm]  = useState('')
+    const [saving,   setSaving]   = useState(false)
+    const [error,    setError]    = useState('')
+
+    async function save() {
+      setError('')
+      if (!current)            { setError('Enter your current password'); return }
+      if (next.length < 8)     { setError('New password must be at least 8 characters'); return }
+      if (next !== confirm)    { setError('New passwords do not match'); return }
+      setSaving(true)
+      try {
+        const res  = await fetch('/api/auth/change-password', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ currentPassword: current, newPassword: next }),
+        })
+        const data = await res.json()
+        if (data.ok) {
+          toast.success('Password changed successfully')
+          onClose()
+        } else {
+          setError(data.error || 'Failed to change password')
+        }
+      } catch {
+        setError('Network error')
+      }
+      setSaving(false)
+    }
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+            <KeyRound size={18} /> Change Password
+          </h2>
+          <p className="text-xs text-slate-400">Changing password for <span className="font-semibold text-slate-600">@{user?.username}</span></p>
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Current Password</label>
+            <input type="password" className="input w-full" placeholder="Your current password"
+              value={current} onChange={e => setCurrent(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">New Password</label>
+            <input type="password" className="input w-full" placeholder="Min 8 characters"
+              value={next} onChange={e => setNext(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Confirm New Password</label>
+            <input type="password" className="input w-full" placeholder="Repeat new password"
+              value={confirm} onChange={e => setConfirm(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && save()} />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+            <button className="btn-primary flex-1" onClick={save} disabled={saving}>
+              {saving ? <RefreshCw size={14} className="animate-spin" /> : null}
+              Save Password
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -289,6 +373,11 @@ export default function Layout({ children }) {
             <X size={16} />
           </button>
         </div>
+      )}
+
+      {/* Change Password modal */}
+      {showChangePw && (
+        <ChangePasswordModal user={user} onClose={() => setShowChangePw(false)} />
       )}
 
       {/* Main content */}
