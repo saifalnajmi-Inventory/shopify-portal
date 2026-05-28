@@ -180,25 +180,41 @@ function StatusBadge({ status }) {
 
 // ── Individual card row ────────────────────────────────────────────────────────
 function DrillDownRow({ rank, item, card, onSuccess }) {
-  const [editing,      setEditing]      = useState(false)
-  const [newQty,       setNewQty]       = useState('')
-  const [pushStatus,   setPushStatus]   = useState('idle')
-  const [statusAction, setStatusAction] = useState(null)
-  const [errMsg,       setErrMsg]       = useState('')
-  const [ruleOpen,     setRuleOpen]     = useState(false)
-  const [hasRule,      setHasRule]      = useState(!!item.hasRestockRule)
-  const [ruleData,     setRuleData]     = useState(item.restockRule || null)
+  const [editing,       setEditing]       = useState(false)
+  const [newQty,        setNewQty]        = useState('')
+  const [pushStatus,    setPushStatus]    = useState('idle')
+  const [statusAction,  setStatusAction]  = useState(null)
+  const [errMsg,        setErrMsg]        = useState('')
+  const [ruleOpen,      setRuleOpen]      = useState(false)
+  const [hasRule,       setHasRule]       = useState(!!item.hasRestockRule)
+  const [ruleData,      setRuleData]      = useState(item.restockRule || null)
+  const [awaitActivate, setAwaitActivate] = useState(false)  // "also activate?" prompt
 
-  const isStatusCard  = STATUS_CARDS.has(card)
+  const isStatusCard    = STATUS_CARDS.has(card)
   const isPushingStatus = statusAction !== null
 
-  // ── Stock push ───────────────────────────────────────────────────────────────
-  async function pushStock() {
+  // ── Step 1: Push button pressed — ask if non-active product should be activated ──
+  function triggerPush() {
     const qty = parseInt(newQty, 10)
     if (isNaN(qty) || qty < 0) { toast.error('Enter a valid quantity'); return }
+
+    // If product is draft or archived, ask before pushing
+    if (item.status && item.status !== 'active') {
+      setAwaitActivate(true)
+    } else {
+      executePush(false)
+    }
+  }
+
+  // ── Step 2: Do the actual push (with optional status change) ─────────────────
+  async function executePush(alsoActivate) {
+    const qty = parseInt(newQty, 10)
+    setAwaitActivate(false)
     setPushStatus('pushing')
+
     try {
-      const res  = await fetch('/api/quickpush', {
+      // Always push the stock update
+      const stockRes  = await fetch('/api/quickpush', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
@@ -213,19 +229,35 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
           changeType:  'inventory',
         }),
       })
-      const data = await res.json()
-      if (data.ok) {
-        setPushStatus('success')
-        toast.success(`✅ ${item.productTitle} → ${qty} units`)
-        setTimeout(() => { setPushStatus('idle'); setEditing(false); onSuccess?.() }, 1800)
-      } else {
-        setPushStatus('failed')
-        setErrMsg(data.error || 'Failed')
-        toast.error(data.error || 'Push failed')
+      const stockData = await stockRes.json()
+      if (!stockData.ok) throw new Error(stockData.error || 'Stock push failed')
+
+      // Optionally also activate the product
+      if (alsoActivate && item.status !== 'active') {
+        await fetch('/api/quickpush', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            productId:   item.productId,
+            entityName:  item.productTitle,
+            fieldName:   'status',
+            beforeValue: item.status,
+            afterValue:  'active',
+            changeType:  'status',
+          }),
+        })
       }
+
+      setPushStatus('success')
+      toast.success(alsoActivate
+        ? `✅ Stock set to ${qty} & product published!`
+        : `✅ ${item.productTitle} → ${qty} units`
+      )
+      setTimeout(() => { setPushStatus('idle'); setEditing(false); onSuccess?.() }, 1800)
     } catch (e) {
       setPushStatus('failed')
       setErrMsg(e.message)
+      toast.error(e.message || 'Push failed')
     }
   }
 
@@ -383,8 +415,8 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
             </div>
           )}
 
-          {/* Editing stock */}
-          {editing && pushStatus === 'idle' && (
+          {/* Editing stock — quantity input */}
+          {editing && pushStatus === 'idle' && !awaitActivate && (
             <div className="flex gap-2 items-center">
               <input
                 autoFocus
@@ -396,21 +428,62 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
                 value={newQty}
                 onChange={e => setNewQty(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter')  pushStock()
-                  if (e.key === 'Escape') { setEditing(false); setNewQty('') }
+                  if (e.key === 'Enter')  triggerPush()
+                  if (e.key === 'Escape') { setEditing(false); setNewQty(''); setAwaitActivate(false) }
                 }}
               />
               <button
                 className="btn-success py-2.5 px-5 text-sm font-semibold shrink-0 flex items-center gap-1.5"
-                onClick={pushStock}
+                onClick={triggerPush}
               >
                 <Send size={14} /> Push
               </button>
               <button
                 className="btn-secondary py-2.5 px-3 text-sm shrink-0"
-                onClick={() => { setEditing(false); setNewQty('') }}
+                onClick={() => { setEditing(false); setNewQty(''); setAwaitActivate(false) }}
               >
                 ✕
+              </button>
+            </div>
+          )}
+
+          {/* ── "Also activate?" confirm prompt ─────────────────────────── */}
+          {awaitActivate && pushStatus === 'idle' && (
+            <div className="mt-2 rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-4 space-y-3">
+              {/* Header */}
+              <div className="flex items-center gap-2">
+                <Eye size={16} className="text-indigo-500 shrink-0" />
+                <p className="text-sm font-bold text-slate-800">
+                  Also publish this product?
+                </p>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Set stock to <span className="font-bold text-slate-700">{newQty} units</span> and also
+                change status from{' '}
+                <span className="font-semibold text-amber-600 capitalize">{item.status}</span>
+                {' '}→{' '}
+                <span className="font-semibold text-emerald-600">Active</span> on Shopify?
+              </p>
+              {/* Action buttons */}
+              <div className="flex gap-2">
+                <button
+                  className="flex-1 py-3 rounded-xl text-sm font-bold bg-indigo-600 text-white active:bg-indigo-700 flex items-center justify-center gap-1.5"
+                  onClick={() => executePush(true)}
+                >
+                  <Eye size={14} /> Yes — Stock + Publish
+                </button>
+                <button
+                  className="flex-1 py-3 rounded-xl text-sm font-semibold bg-white text-slate-600 border border-slate-200 active:bg-slate-50"
+                  onClick={() => executePush(false)}
+                >
+                  Stock only
+                </button>
+              </div>
+              <button
+                className="w-full text-xs text-slate-400 text-center py-1"
+                onClick={() => { setAwaitActivate(false); setEditing(true) }}
+              >
+                ← Back to edit quantity
               </button>
             </div>
           )}
