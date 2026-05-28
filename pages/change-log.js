@@ -12,9 +12,10 @@ function formatDate(raw) {
   const date  = d.getDate()
   const month = d.toLocaleDateString('en-GB', { month: 'long' })
   const time  = d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }).toUpperCase()
-  const suffix = date === 1 || date === 21 || date === 31 ? 'st'
-               : date === 2 || date === 22             ? 'nd'
-               : date === 3 || date === 23             ? 'rd' : 'th'
+  const suffix = [11,12,13].includes(date) ? 'th'
+               : date % 10 === 1 ? 'st'
+               : date % 10 === 2 ? 'nd'
+               : date % 10 === 3 ? 'rd' : 'th'
   return { top: `${day}, ${date}${suffix} ${month}`, bottom: time }
 }
 
