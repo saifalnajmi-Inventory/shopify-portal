@@ -5,6 +5,19 @@ import { useState, useEffect } from 'react'
 import { History, Download, RefreshCw, CheckCircle2, XCircle } from 'lucide-react'
 import clsx from 'clsx'
 
+/** Format: "Thursday, 28th May · 2:51 PM" */
+function formatDate(raw) {
+  const d = new Date(raw)
+  const day   = d.toLocaleDateString('en-GB', { weekday: 'long' })
+  const date  = d.getDate()
+  const month = d.toLocaleDateString('en-GB', { month: 'long' })
+  const time  = d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }).toUpperCase()
+  const suffix = date === 1 || date === 21 || date === 31 ? 'st'
+               : date === 2 || date === 22             ? 'nd'
+               : date === 3 || date === 23             ? 'rd' : 'th'
+  return { top: `${day}, ${date}${suffix} ${month}`, bottom: time }
+}
+
 export default function ChangeLogPage() {
   const [logs,   setLogs]   = useState([])
   const [total,  setTotal]  = useState(0)
@@ -64,6 +77,7 @@ export default function ChangeLogPage() {
         <table className="tbl">
           <thead>
             <tr>
+              <th className="text-center w-10">#</th>
               <th>Date / Time</th>
               <th>Product</th>
               <th>Field</th>
@@ -76,10 +90,15 @@ export default function ChangeLogPage() {
             </tr>
           </thead>
           <tbody>
-            {logs.map(l => (
+            {logs.map((l, idx) => {
+              const { top, bottom } = formatDate(l.pushedAt)
+              const srNo = (page - 1) * 50 + idx + 1
+              return (
               <tr key={l.id}>
-                <td className="text-xs text-slate-400 whitespace-nowrap">
-                  {new Date(l.pushedAt).toLocaleString()}
+                <td className="text-center text-xs text-slate-400 font-mono">{srNo}</td>
+                <td className="text-xs whitespace-nowrap">
+                  <div className="font-medium text-slate-700">{top}</div>
+                  <div className="text-slate-400">{bottom}</div>
                 </td>
                 <td className="font-medium max-w-[180px] truncate">{l.entityName}</td>
                 <td className="font-mono text-xs">{l.fieldName}</td>
@@ -103,10 +122,10 @@ export default function ChangeLogPage() {
                 <td className="text-xs text-red-500 max-w-[200px] truncate">{l.errorMessage || '—'}</td>
                 <td className="text-xs text-slate-400">{l.pushedBy || 'admin'}</td>
               </tr>
-            ))}
+            )})}
             {!loading && !logs.length && (
               <tr>
-                <td colSpan={9} className="text-center py-12 text-slate-400">
+                <td colSpan={10} className="text-center py-12 text-slate-400">
                   No push history yet. Push some approved changes to see them here.
                 </td>
               </tr>
