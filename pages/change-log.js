@@ -98,7 +98,7 @@ export default function ChangeLogPage() {
                 <td className="text-center text-xs text-slate-400 font-mono">{srNo}</td>
                 <td className="text-xs whitespace-nowrap">
                   <div className="font-medium text-slate-700">{top}</div>
-                  <div className="text-slate-400">{bottom}</div>
+                  <div className="font-medium text-slate-500">{bottom}</div>
                 </td>
                 <td className="font-medium max-w-[180px] truncate">{l.entityName}</td>
                 <td className="font-mono text-xs">{l.fieldName}</td>
