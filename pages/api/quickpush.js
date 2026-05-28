@@ -54,7 +54,7 @@ async function handler(req, res) {
       changeType,
       status:     'approved',
       approvedAt: new Date(),
-      createdBy:  'dashboard-quick-push',
+      createdBy:  req.user.name || req.user.username,
     },
   })
 
@@ -141,7 +141,7 @@ async function handler(req, res) {
       entityName:    entityName || '',
       fieldName, beforeValue: String(beforeValue ?? ''), afterValue: String(afterValue ?? ''),
       changeType, status, errorMessage: errorMessage || null,
-      pushedBy: 'dashboard-quick-push',
+      pushedBy: req.user.name || req.user.username,
       shopifyResponse: shopifyResponse?.substring(0, 2000) || null,
     },
   })

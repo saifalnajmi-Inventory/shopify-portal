@@ -164,7 +164,7 @@ async function handler(req, res) {
         changeType:      change.changeType,
         status,
         errorMessage:    errorMessage || null,
-        pushedBy:        change.createdBy || 'admin',
+        pushedBy:        req.user.name || req.user.username,
         shopifyResponse: shopifyResponse ? shopifyResponse.substring(0, 2000) : null,
       },
     })
