@@ -104,13 +104,73 @@ export default function Dashboard() {
             {lastSync
               ? `Last synced ${formatDistanceToNow(new Date(lastSync), { addSuffix: true })}`
               : 'Not synced yet — click Sync from Shopify in the sidebar'}
-            <span className="ml-3 text-indigo-400 text-xs">· Click any card to see the product list</span>
+            <span className="ml-3 text-indigo-400 text-xs hidden sm:inline">· Click any card to see the product list</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button className="btn-primary" onClick={load}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
+        </div>
+      </div>
+
+      {/* ── Mobile health bar (hidden on desktop) ───────────────────────── */}
+      <div className="sm:hidden -mx-4 px-4 overflow-x-auto">
+        <div className="flex gap-3 pb-1" style={{ width: 'max-content' }}>
+          {/* Active products */}
+          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 shrink-0">
+            <PackageCheck size={16} className="text-emerald-500" />
+            <div>
+              <div className="text-xs text-emerald-500 font-semibold leading-none">Active</div>
+              <div className="text-lg font-bold text-emerald-700 leading-none mt-0.5">{cards.activeProducts}</div>
+            </div>
+          </div>
+          {/* In stock */}
+          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 shrink-0">
+            <PackageCheck size={16} className="text-emerald-500" />
+            <div>
+              <div className="text-xs text-emerald-500 font-semibold leading-none">In Stock</div>
+              <div className="text-lg font-bold text-emerald-700 leading-none mt-0.5">{cards.inStockVariants}</div>
+            </div>
+          </div>
+          {/* OOS - alert */}
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-2xl px-4 py-2.5 shrink-0">
+            <PackageX size={16} className="text-red-500" />
+            <div>
+              <div className="text-xs text-red-500 font-semibold leading-none">Out of Stock</div>
+              <div className="text-lg font-bold text-red-700 leading-none mt-0.5">{cards.outOfStockVariants}</div>
+            </div>
+          </div>
+          {/* Critical low */}
+          {cards.lowStockVariants > 0 && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2.5 shrink-0">
+              <AlertTriangle size={16} className="text-amber-500" />
+              <div>
+                <div className="text-xs text-amber-500 font-semibold leading-none">Critical (&lt;3)</div>
+                <div className="text-lg font-bold text-amber-700 leading-none mt-0.5">{cards.lowStockVariants}</div>
+              </div>
+            </div>
+          )}
+          {/* Total variants */}
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 shrink-0">
+            <Layers size={16} className="text-slate-500" />
+            <div>
+              <div className="text-xs text-slate-500 font-semibold leading-none">Variants</div>
+              <div className="text-lg font-bold text-slate-700 leading-none mt-0.5">{cards.totalVariants}</div>
+            </div>
+          </div>
+          {/* Last sync */}
+          {lastSync && (
+            <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-2.5 shrink-0">
+              <RefreshCw size={16} className="text-indigo-400" />
+              <div>
+                <div className="text-xs text-indigo-500 font-semibold leading-none">Last Sync</div>
+                <div className="text-xs font-bold text-indigo-700 leading-none mt-0.5">
+                  {formatDistanceToNow(new Date(lastSync), { addSuffix: true })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { X, RefreshCw, Package, Send, Loader2, CheckCircle2, XCircle, Eye, EyeOff, Archive, Zap } from 'lucide-react'
+import { X, RefreshCw, Package, Send, Loader2, CheckCircle2, XCircle,
+         Eye, EyeOff, Archive, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 
@@ -9,13 +10,13 @@ const STATUS_CARDS = new Set(['draftProducts', 'activeProducts', 'archivedProduc
 const PAGE_SIZE = 50
 
 export default function DrillDownPanel({ card, title, onClose, onRefreshDashboard }) {
-  const [items,      setItems]      = useState([])
-  const [loading,    setLoading]    = useState(true)
-  const [loadingMore,setLoadingMore]= useState(false)
-  const [error,      setError]      = useState(null)
-  const [page,       setPage]       = useState(1)
-  const [total,      setTotal]      = useState(0)
-  const [hasMore,    setHasMore]    = useState(false)
+  const [items,       setItems]       = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error,       setError]       = useState(null)
+  const [page,        setPage]        = useState(1)
+  const [total,       setTotal]       = useState(0)
+  const [hasMore,     setHasMore]     = useState(false)
 
   async function load(resetPage = true) {
     if (!card) return
@@ -64,7 +65,7 @@ export default function DrillDownPanel({ card, title, onClose, onRefreshDashboar
       if (!res.ok) throw new Error(data.error)
       setItems(data.items || [])
       setTotal(data.total || 0)
-      setHasMore(data.hasMore || false)
+      setHasMore(false)
       setPage(1)
     } catch (e) {
       setError(e.message)
@@ -73,41 +74,38 @@ export default function DrillDownPanel({ card, title, onClose, onRefreshDashboar
     }
   }
 
-  useEffect(() => { load() }, [card])
+  useEffect(() => { load() }, [card])  // eslint-disable-line
 
   const showing = items.length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] sm:max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] sm:max-h-[85vh] flex flex-col">
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
-          <div>
-            <h2 className="font-bold text-slate-800 text-lg">{title}</h2>
+        {/* ── Header ──────────────────────────────────────────────────────── */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+          <div className="flex-1 min-w-0 pr-3">
+            <h2 className="font-bold text-slate-800 text-lg leading-tight">{title}</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {loading
-                ? 'Loading…'
-                : total > 0
-                  ? `Showing ${showing} of ${total} · Click "Update Stock" to push directly to Shopify`
-                  : 'No products found'}
+              {loading ? 'Loading…' : total > 0 ? `Showing ${showing} of ${total}` : 'No items found'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="btn-secondary py-1.5 px-3 text-xs" onClick={() => load()}>
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={() => load()}>
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
             </button>
-            <button className="btn-secondary py-1.5 px-3 text-xs" onClick={onClose}>
-              <X size={15} /> Close
+            <button className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={onClose}>
+              <X size={15} />
             </button>
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+        {/* ── Body ────────────────────────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto">
+
           {loading && (
-            <div className="flex items-center justify-center py-16 text-slate-400 gap-3">
-              <RefreshCw size={20} className="animate-spin" /> Loading products…
+            <div className="flex items-center justify-center py-20 text-slate-400 gap-3">
+              <RefreshCw size={20} className="animate-spin" /> Loading…
             </div>
           )}
 
@@ -116,7 +114,7 @@ export default function DrillDownPanel({ card, title, onClose, onRefreshDashboar
           )}
 
           {!loading && !error && !items.length && (
-            <div className="flex items-center justify-center py-16 text-slate-400">
+            <div className="flex items-center justify-center py-20 text-slate-400">
               No products found for this filter.
             </div>
           )}
@@ -131,29 +129,23 @@ export default function DrillDownPanel({ card, title, onClose, onRefreshDashboar
             />
           ))}
 
-          {/* ── Load More / Load All footer ──────────────────────────────── */}
+          {/* ── Load More footer ──────────────────────────────────────────── */}
           {!loading && !error && hasMore && (
-            <div className="px-6 py-4 flex items-center justify-between bg-slate-50 border-t border-slate-100">
+            <div className="px-5 py-4 flex items-center justify-between bg-slate-50 border-t border-slate-100">
               <span className="text-xs text-slate-500">
-                Showing <span className="font-semibold text-slate-700">{showing}</span> of{' '}
-                <span className="font-semibold text-slate-700">{total}</span> products
+                <span className="font-semibold text-slate-700">{showing}</span> of{' '}
+                <span className="font-semibold text-slate-700">{total}</span>
               </span>
               <div className="flex gap-2">
                 <button
-                  className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-1.5"
+                  className="btn-secondary py-1.5 px-4 text-xs"
                   onClick={loadMore}
                   disabled={loadingMore}
                 >
-                  {loadingMore
-                    ? <><RefreshCw size={12} className="animate-spin" /> Loading…</>
-                    : `Load next ${Math.min(PAGE_SIZE, total - showing)}`}
+                  {loadingMore ? <><RefreshCw size={12} className="animate-spin mr-1" />Loading…</> : `Next ${Math.min(PAGE_SIZE, total - showing)}`}
                 </button>
                 {total <= 500 && (
-                  <button
-                    className="btn-primary py-1.5 px-4 text-xs"
-                    onClick={loadAll}
-                    disabled={loadingMore}
-                  >
+                  <button className="btn-primary py-1.5 px-4 text-xs" onClick={loadAll} disabled={loadingMore}>
                     Load all {total}
                   </button>
                 )}
@@ -162,8 +154,8 @@ export default function DrillDownPanel({ card, title, onClose, onRefreshDashboar
           )}
 
           {!loading && !error && !hasMore && total > PAGE_SIZE && (
-            <div className="px-6 py-3 text-center text-xs text-slate-400 bg-slate-50 border-t border-slate-100">
-              All {total} products loaded ✓
+            <div className="px-5 py-3 text-center text-xs text-slate-400 bg-slate-50 border-t border-slate-100">
+              All {total} loaded ✓
             </div>
           )}
         </div>
@@ -172,7 +164,7 @@ export default function DrillDownPanel({ card, title, onClose, onRefreshDashboar
   )
 }
 
-// ── Status badge helper ────────────────────────────────────────────────────────
+// ── Status badge ───────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const map = {
     active:   'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -180,26 +172,30 @@ function StatusBadge({ status }) {
     archived: 'bg-slate-100  text-slate-500   border-slate-200',
   }
   return (
-    <span className={clsx('text-xs font-semibold px-2 py-0.5 rounded-md border capitalize', map[status] || map.draft)}>
+    <span className={clsx('inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-md border capitalize', map[status] || map.draft)}>
       {status}
     </span>
   )
 }
 
+// ── Individual card row ────────────────────────────────────────────────────────
 function DrillDownRow({ rank, item, card, onSuccess }) {
   const [editing,      setEditing]      = useState(false)
   const [newQty,       setNewQty]       = useState('')
-  const [pushStatus,   setPushStatus]   = useState('idle')   // idle | pushing | success | failed
-  const [statusAction, setStatusAction] = useState(null)     // 'active' | 'draft' | null (being pushed)
+  const [pushStatus,   setPushStatus]   = useState('idle')
+  const [statusAction, setStatusAction] = useState(null)
   const [errMsg,       setErrMsg]       = useState('')
+  const [ruleOpen,     setRuleOpen]     = useState(false)
+  const [hasRule,      setHasRule]      = useState(!!item.hasRestockRule)
+  const [ruleData,     setRuleData]     = useState(item.restockRule || null)
 
-  const isStatusCard = STATUS_CARDS.has(card)
+  const isStatusCard  = STATUS_CARDS.has(card)
+  const isPushingStatus = statusAction !== null
 
-  // ── Push inventory quantity ──────────────────────────────────────────────────
+  // ── Stock push ───────────────────────────────────────────────────────────────
   async function pushStock() {
     const qty = parseInt(newQty, 10)
     if (isNaN(qty) || qty < 0) { toast.error('Enter a valid quantity'); return }
-
     setPushStatus('pushing')
     try {
       const res  = await fetch('/api/quickpush', {
@@ -220,7 +216,7 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
       const data = await res.json()
       if (data.ok) {
         setPushStatus('success')
-        toast.success(`✅ ${item.productTitle} → ${qty} units pushed`)
+        toast.success(`✅ ${item.productTitle} → ${qty} units`)
         setTimeout(() => { setPushStatus('idle'); setEditing(false); onSuccess?.() }, 1800)
       } else {
         setPushStatus('failed')
@@ -233,7 +229,7 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
     }
   }
 
-  // ── Push status change (draft ↔ active ↔ archived) ──────────────────────────
+  // ── Status change ────────────────────────────────────────────────────────────
   async function changeProductStatus(newStatus) {
     setStatusAction(newStatus)
     try {
@@ -251,11 +247,11 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
       })
       const data = await res.json()
       if (data.ok) {
-        const label = newStatus === 'active' ? '✅ Published' : newStatus === 'draft' ? '📋 Set to Draft' : '🗃 Archived'
+        const label = newStatus === 'active' ? '✅ Published' : newStatus === 'draft' ? '📋 Draft' : '🗃 Archived'
         toast.success(`${label}: ${item.productTitle}`)
         setTimeout(() => { setStatusAction(null); onSuccess?.() }, 1200)
       } else {
-        toast.error(data.error || 'Status change failed')
+        toast.error(data.error || 'Failed')
         setStatusAction(null)
       }
     } catch (e) {
@@ -264,282 +260,330 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
     }
   }
 
-  const stockColor =
-    item.currentQty <= 0 ? 'bg-red-50 text-red-600 border-red-200' :
-    item.currentQty <  5 ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                           'bg-emerald-50 text-emerald-600 border-emerald-200'
-
-  const isPushingStatus = statusAction !== null
+  // Stock colour pill
+  const qty = item.currentQty
+  const stockPill =
+    qty <= 0 ? 'bg-red-500 text-white'   :
+    qty <  5 ? 'bg-amber-400 text-white' :
+               'bg-emerald-500 text-white'
 
   return (
-    <div className="px-4 py-3 hover:bg-slate-50 transition-colors">
+    <>
+      <div className="px-4 py-4 border-b border-slate-100 active:bg-slate-50 transition-colors">
 
-      {/* ── Single flex row: rank + image + ALL content on right ─────────── */}
-      <div className="flex items-start gap-3 min-w-0">
-        {/* Rank */}
-        <span className="text-xs font-bold text-slate-300 w-5 text-center shrink-0 pt-1">{rank}</span>
+        {/* ── Top: image + title + stock pill ─────────────────────────────── */}
+        <div className="flex gap-3 items-start">
 
-        {/* Image */}
-        {item.image
-          ? <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" onError={e => e.target.style.display='none'} />
-          : <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-              <Package size={15} className="text-slate-300" />
-            </div>
-        }
+          {/* Image */}
+          {item.image
+            ? <img src={item.image} alt="" className="w-12 h-12 rounded-xl object-cover border border-slate-100 shrink-0"
+                onError={e => { e.target.style.display = 'none' }} />
+            : <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                <Package size={18} className="text-slate-300" />
+              </div>
+          }
 
-        {/* Right column — everything stacks here, width = flex-1 */}
-        <div className="flex-1 min-w-0 overflow-hidden">
+          {/* Info */}
+          <div className="flex-1" style={{ minWidth: 0 }}>
+            {/* Product name — always visible, never clipped */}
+            <p className="text-sm font-bold text-slate-800 leading-snug"
+               style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+              {rank}. {item.productTitle}
+            </p>
 
-          {/* Product title + status badge */}
-          <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-            <span className="text-sm font-semibold text-slate-800 leading-snug break-words">
-              {item.productTitle}
+            {/* Variant + SKU on one compact line */}
+            {(item.variantTitle && item.variantTitle !== 'Default Title') || item.sku ? (
+              <p className="text-xs text-slate-400 mt-0.5">
+                {[
+                  item.variantTitle !== 'Default Title' ? item.variantTitle : null,
+                  item.sku ? `SKU: ${item.sku}` : null,
+                ].filter(Boolean).join(' · ')}
+              </p>
+            ) : null}
+
+            {/* Status badge */}
+            {item.status && <div className="mt-1"><StatusBadge status={item.status} /></div>}
+          </div>
+
+          {/* Stock count pill — top right, always visible */}
+          {!isStatusCard && (
+            <span className={clsx('shrink-0 text-xs font-bold px-2.5 py-1 rounded-full self-start', stockPill)}>
+              {qty <= 0 ? 'OOS' : qty}
             </span>
-            {item.status && <StatusBadge status={item.status} />}
-          </div>
+          )}
+        </div>
 
-          {/* Variant / SKU / sales stats */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            {item.variantTitle && item.variantTitle !== 'Default Title' && (
-              <span className="text-xs text-slate-400">{item.variantTitle}</span>
-            )}
-            {item.sku && (
-              <span className="text-xs text-slate-400 font-mono">SKU:{item.sku}</span>
-            )}
-            {item.sold30Days > 0 && (
-              <span className="text-xs text-indigo-500 font-medium">{item.sold30Days} sold/30d</span>
-            )}
-            {item.sold7Days > 0 && (
-              <span className="text-xs text-purple-500 font-medium">{item.sold7Days} sold/7d</span>
-            )}
-            {item.totalSold === 0 && (
-              <span className="text-xs text-slate-300 italic">No sales</span>
-            )}
-            {item.hasRestockRule && item.restockRule && (
-              <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-300 px-1.5 py-0.5 rounded font-bold leading-none">
-                <Zap size={8} />
-                {'<'}{item.restockRule.threshold}→{item.restockRule.restockTo}
-                {item.restockRule.autoRestock && <span className="text-emerald-600 ml-0.5">auto</span>}
-              </span>
-            )}
-          </div>
+        {/* ── Actions ─────────────────────────────────────────────────────── */}
+        <div className="mt-3">
 
-          {/* ── Action row — inside right column so it's width-constrained ── */}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {/* Normal state: buttons */}
+          {!editing && pushStatus === 'idle' && (
+            <div className="flex gap-2">
 
-            {/* Stock badge */}
-            {!isStatusCard && (
-              <div className={clsx('text-xs font-bold px-2.5 py-1 rounded-lg border shrink-0', stockColor)}>
-                {item.currentQty <= 0 ? '0 · OOS' : `${item.currentQty} left`}
-              </div>
-            )}
+              {/* Status toggle button */}
+              {isPushingStatus ? (
+                <span className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+                  <Loader2 size={12} className="animate-spin" /> Updating…
+                </span>
+              ) : (
+                <>
+                  {item.status === 'draft' && (
+                    <button
+                      className="btn-success flex-1 py-2.5 text-xs"
+                      onClick={() => changeProductStatus('active')}
+                    >
+                      <Eye size={13} /> Publish
+                    </button>
+                  )}
+                  {item.status === 'active' && (
+                    <button
+                      className="btn-secondary flex-1 py-2.5 text-xs"
+                      onClick={() => changeProductStatus('draft')}
+                    >
+                      <EyeOff size={13} /> Set Draft
+                    </button>
+                  )}
+                  {item.status === 'archived' && (
+                    <button
+                      className="btn-secondary flex-1 py-2.5 text-xs"
+                      onClick={() => changeProductStatus('draft')}
+                    >
+                      <Archive size={13} /> Unarchive
+                    </button>
+                  )}
+                </>
+              )}
 
-            {/* Status action buttons */}
-            {isPushingStatus ? (
-              <span className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
-                <Loader2 size={13} className="animate-spin" /> Updating…
-              </span>
-            ) : (
-              <>
-                {item.status === 'draft' && (
-                  <button className="btn-success py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('active')}>
-                    <Eye size={13} /> Publish
-                  </button>
-                )}
-                {item.status === 'active' && (
-                  <button className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('draft')}>
-                    <EyeOff size={13} /> Set Draft
-                  </button>
-                )}
-                {item.status === 'archived' && (
-                  <button className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('draft')}>
-                    <Archive size={13} /> Unarchive
-                  </button>
-                )}
-              </>
-            )}
+              {/* Rule button */}
+              {!isPushingStatus && (
+                <button
+                  className={clsx(
+                    'py-2.5 px-3 rounded-xl text-xs font-bold border flex items-center gap-1 shrink-0 transition-colors',
+                    hasRule
+                      ? 'bg-amber-500 text-white border-amber-600'
+                      : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'
+                  )}
+                  onClick={() => setRuleOpen(true)}
+                  title="Auto-restock rule"
+                >
+                  <Zap size={12} />
+                  {hasRule ? '✓' : 'Rule'}
+                </button>
+              )}
 
-            {/* Rule shortcut */}
-            {pushStatus === 'idle' && !editing && !isPushingStatus && (
-              <RestockRuleButton item={item} />
-            )}
+              {/* Update stock / stock count */}
+              {!isPushingStatus && (
+                <button
+                  className={clsx('flex-1 py-2.5 text-xs font-semibold rounded-xl', isStatusCard ? 'btn-secondary' : 'btn-primary')}
+                  onClick={() => { setEditing(true); setNewQty(String(Math.max(0, item.currentQty))) }}
+                >
+                  {isStatusCard ? `${item.currentQty} in stock` : 'Update Stock'}
+                </button>
+              )}
+            </div>
+          )}
 
-            {/* Stock update button */}
-            {pushStatus === 'idle' && !editing && (
-              <button
-                className={clsx('py-1.5 px-3 text-xs', isStatusCard ? 'btn-secondary' : 'btn-primary')}
-                onClick={() => { setEditing(true); setNewQty(String(Math.max(0, item.currentQty))) }}
-              >
-                {isStatusCard ? `${item.currentQty} stock` : 'Update Stock'}
-              </button>
-            )}
-          </div>
-
-          {/* Inline stock edit */}
+          {/* Editing stock */}
           {editing && pushStatus === 'idle' && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 bg-white border-2 border-indigo-300 rounded-xl px-3 py-2 shadow-sm">
-                <span className="text-xs text-slate-400 font-medium whitespace-nowrap">New qty:</span>
-                <input
-                  autoFocus
-                  type="number"
-                  min="0"
-                  className="w-16 text-base font-bold text-slate-800 focus:outline-none text-center"
-                  value={newQty}
-                  onChange={e => setNewQty(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter')  pushStock()
-                    if (e.key === 'Escape') { setEditing(false); setNewQty('') }
-                  }}
-                />
-              </div>
-              <button className="btn-success py-2 px-4 text-sm font-semibold flex items-center gap-1.5" onClick={pushStock}>
+            <div className="flex gap-2 items-center">
+              <input
+                autoFocus
+                type="number"
+                min="0"
+                inputMode="numeric"
+                placeholder="0"
+                className="flex-1 text-center text-2xl font-bold border-2 border-indigo-400 rounded-xl py-2.5 focus:outline-none focus:border-indigo-500"
+                value={newQty}
+                onChange={e => setNewQty(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter')  pushStock()
+                  if (e.key === 'Escape') { setEditing(false); setNewQty('') }
+                }}
+              />
+              <button
+                className="btn-success py-2.5 px-5 text-sm font-semibold shrink-0 flex items-center gap-1.5"
+                onClick={pushStock}
+              >
                 <Send size={14} /> Push
               </button>
-              <button className="btn-secondary py-2 px-3 text-sm" onClick={() => { setEditing(false); setNewQty('') }}>
-                Cancel
+              <button
+                className="btn-secondary py-2.5 px-3 text-sm shrink-0"
+                onClick={() => { setEditing(false); setNewQty('') }}
+              >
+                ✕
               </button>
             </div>
           )}
 
+          {/* Push status states */}
           {pushStatus === 'pushing' && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-indigo-600 font-medium">
+            <div className="flex items-center gap-2 text-sm text-indigo-600 font-medium py-1">
               <Loader2 size={15} className="animate-spin" /> Pushing to Shopify…
             </div>
           )}
           {pushStatus === 'success' && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-emerald-600 font-semibold">
+            <div className="flex items-center gap-2 text-sm text-emerald-600 font-semibold py-1">
               <CheckCircle2 size={15} /> Updated to {newQty} units ✓
             </div>
           )}
           {pushStatus === 'failed' && (
-            <div className="mt-2 space-y-1">
+            <div className="space-y-1 py-1">
               <div className="flex items-center gap-2 text-sm text-red-600">
-                <XCircle size={14} /> Push failed: {errMsg}
+                <XCircle size={14} /> Failed: {errMsg}
               </div>
-              <button className="text-xs text-indigo-600 underline" onClick={() => { setPushStatus('idle'); setEditing(true) }}>
+              <button
+                className="text-xs text-indigo-600 underline"
+                onClick={() => { setPushStatus('idle'); setEditing(true) }}
+              >
                 Try again
               </button>
             </div>
           )}
+        </div>
+      </div>
 
-        </div>{/* end right column */}
-      </div>{/* end flex row */}
-    </div>
+      {/* ── Rule bottom sheet ──────────────────────────────────────────────── */}
+      {ruleOpen && (
+        <RuleSheet
+          item={item}
+          hasRule={hasRule}
+          ruleData={ruleData}
+          onClose={() => setRuleOpen(false)}
+          onSaved={(rule) => {
+            setHasRule(true)
+            setRuleData(rule)
+            setRuleOpen(false)
+          }}
+        />
+      )}
+    </>
   )
 }
 
-// ── Restock Rule inline button ─────────────────────────────────────────────────
-function RestockRuleButton({ item }) {
-  const [open,      setOpen]      = useState(false)
-  const [saving,    setSaving]    = useState(false)
-  // Track rule state locally so it updates immediately after save without a full list reload
-  const [hasRule,   setHasRule]   = useState(!!item.hasRestockRule)
-  const [savedRule, setSavedRule] = useState(item.restockRule || null)
-  const [form,      setForm]      = useState({
-    threshold:   String(item.restockRule?.threshold  ?? 10),
-    restockTo:   String(item.restockRule?.restockTo  ?? 10),
-    autoRestock: item.restockRule?.autoRestock || false,
+// ── Rule bottom sheet — slides up from bottom ─────────────────────────────────
+function RuleSheet({ item, hasRule, ruleData, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    threshold:   String(ruleData?.threshold  ?? 10),
+    restockTo:   String(ruleData?.restockTo  ?? 10),
+    autoRestock: ruleData?.autoRestock || false,
   })
+  const [saving, setSaving] = useState(false)
 
   async function save() {
     setSaving(true)
-    const res = await fetch('/api/restock-rules', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        productId:    item.productId,
-        variantId:    item.variantId,
-        productTitle: item.productTitle,
-        variantTitle: item.variantTitle,
-        sku:          item.sku,
-        threshold:    form.threshold,
-        restockTo:    form.restockTo,
-        autoRestock:  form.autoRestock,
-      }),
-    })
-    const data = await res.json()
-    if (data.ok) {
-      const verb = hasRule ? 'updated' : 'saved'
-      toast.success(`Rule ${verb} for ${item.productTitle}`)
-      const updated = {
-        threshold:   parseInt(form.threshold,  10),
-        restockTo:   parseInt(form.restockTo,  10),
-        autoRestock: form.autoRestock,
-        enabled:     true,
+    try {
+      const res  = await fetch('/api/restock-rules', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          productId:    item.productId,
+          variantId:    item.variantId,
+          productTitle: item.productTitle,
+          variantTitle: item.variantTitle,
+          sku:          item.sku,
+          threshold:    form.threshold,
+          restockTo:    form.restockTo,
+          autoRestock:  form.autoRestock,
+        }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        toast.success(`Rule ${hasRule ? 'updated' : 'saved'} ✓`)
+        onSaved({
+          threshold:   parseInt(form.threshold, 10),
+          restockTo:   parseInt(form.restockTo, 10),
+          autoRestock: form.autoRestock,
+        })
+      } else {
+        toast.error(data.error || 'Failed to save rule')
       }
-      setHasRule(true)
-      setSavedRule(updated)
-      setOpen(false)
-    } else {
-      toast.error(data.error || 'Failed')
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
-  }
-
-  // ── Expanded edit panel — stacks on mobile ──────────────────────────────────
-  if (open) return (
-    <div className={clsx(
-      'rounded-xl px-3 py-2 border w-full',
-      hasRule ? 'bg-amber-50 border-amber-300' : 'bg-amber-50 border-amber-200'
-    )}>
-      {/* Row 1: inputs */}
-      <div className="flex flex-wrap items-center gap-2 mb-2">
-        <Zap size={13} className="text-amber-500 shrink-0" />
-        <span className="text-xs text-slate-600 font-medium">Alert &lt;</span>
-        <input
-          type="number" min="1"
-          className="w-14 text-xs text-center input py-1"
-          value={form.threshold}
-          onChange={e => setForm(f => ({ ...f, threshold: e.target.value }))}
-        />
-        <span className="text-xs text-slate-500">→ restore to</span>
-        <input
-          type="number" min="1"
-          className="w-14 text-xs text-center input py-1"
-          value={form.restockTo}
-          onChange={e => setForm(f => ({ ...f, restockTo: e.target.value }))}
-        />
-      </div>
-      {/* Row 2: action buttons */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          className={clsx('text-xs px-2 py-1 rounded-lg font-semibold border transition-all', form.autoRestock
-            ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-            : 'bg-white text-slate-500 border-slate-200'
-          )}
-          onClick={() => setForm(f => ({ ...f, autoRestock: !f.autoRestock }))}
-        >
-          {form.autoRestock ? '⚡ Auto-push' : '🔔 Alert only'}
-        </button>
-        <button className="btn-success py-1 px-3 text-xs" onClick={save} disabled={saving}>
-          {saving ? <Loader2 size={11} className="animate-spin" /> : '✓ Save Rule'}
-        </button>
-        <button className="text-slate-400 hover:text-slate-600 text-xs px-1 ml-auto" onClick={() => setOpen(false)}>✕ Cancel</button>
-      </div>
-    </div>
-  )
-
-  // ── Trigger button — filled amber when rule exists, outlined when not ────────
-  if (hasRule) {
-    return (
-      <button
-        className="text-xs flex items-center gap-1 shrink-0 border px-2 py-1 rounded-lg transition-colors bg-amber-500 text-white border-amber-600 hover:bg-amber-600"
-        onClick={() => setOpen(true)}
-        title={`Edit rule: alert < ${savedRule?.threshold}, restore to ${savedRule?.restockTo}`}
-      >
-        <Zap size={11} /> Rule ✓
-      </button>
-    )
   }
 
   return (
-    <button
-      className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1 shrink-0 border border-amber-200 px-2 py-1 rounded-lg hover:bg-amber-50 transition-colors"
-      onClick={() => setOpen(true)}
-      title="Set auto-restock rule for this variant"
-    >
-      <Zap size={11} /> Rule
-    </button>
+    <div className="fixed inset-0 z-[60] flex items-end">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Sheet */}
+      <div className="relative bg-white rounded-t-3xl w-full p-6 space-y-5 shadow-2xl max-w-2xl mx-auto">
+        {/* Handle bar */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 bg-slate-200 rounded-full" />
+
+        {/* Title */}
+        <div className="flex items-center justify-between pt-2">
+          <div>
+            <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+              <Zap size={16} className="text-amber-500" />
+              Auto-Restock Rule
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5 max-w-[260px] truncate">{item.productTitle}</p>
+          </div>
+          <button className="text-slate-400 hover:text-slate-600 p-1" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Threshold + Restock inputs */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">
+              Alert when stock ↓ below
+            </label>
+            <input
+              type="number"
+              min="1"
+              inputMode="numeric"
+              className="input w-full text-center text-2xl font-bold py-3"
+              value={form.threshold}
+              onChange={e => setForm(f => ({ ...f, threshold: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">
+              Restore quantity to
+            </label>
+            <input
+              type="number"
+              min="1"
+              inputMode="numeric"
+              className="input w-full text-center text-2xl font-bold py-3"
+              value={form.restockTo}
+              onChange={e => setForm(f => ({ ...f, restockTo: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        {/* Auto-push toggle */}
+        <button
+          className={clsx(
+            'w-full py-3.5 rounded-2xl font-semibold text-sm border-2 transition-all',
+            form.autoRestock
+              ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm'
+              : 'bg-white text-slate-600 border-slate-200'
+          )}
+          onClick={() => setForm(f => ({ ...f, autoRestock: !f.autoRestock }))}
+        >
+          {form.autoRestock
+            ? '⚡ Auto-push to Shopify when triggered'
+            : '🔔 Alert only — tap to enable auto-push'}
+        </button>
+
+        {/* Buttons */}
+        <div className="flex gap-3 pb-2">
+          <button className="btn-secondary flex-1 py-3" onClick={onClose}>Cancel</button>
+          <button className="btn-primary flex-1 py-3" onClick={save} disabled={saving}>
+            {saving
+              ? <><RefreshCw size={14} className="animate-spin" /> Saving…</>
+              : <><Zap size={14} /> {hasRule ? 'Update Rule' : 'Save Rule'}</>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
