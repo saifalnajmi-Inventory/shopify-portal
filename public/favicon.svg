@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="12" fill="#0a0a0a"/>
+  <!-- S letter - blue -->
+  <text x="6" y="47" font-family="Arial Black, Arial" font-weight="900" font-size="38" fill="#1EB5F0" letter-spacing="-2">S</text>
+  <!-- N letter - orange -->
+  <text x="30" y="47" font-family="Arial Black, Arial" font-weight="900" font-size="38" fill="#F5A623" letter-spacing="-2">N</text>
+</svg>

@@ -4,13 +4,11 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        {/* Mobile-first viewport — prevents Safari scaling to desktop width */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-        {/* PWA / home screen */}
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Inventory Portal" />
-        <meta name="theme-color" content="#4f46e5" />
+        {/* Favicon — SN brand mark */}
+        <link rel="icon"             href="/favicon.svg" type="image/svg+xml" />
+        <link rel="shortcut icon"    href="/favicon.svg" />
+        <link rel="apple-touch-icon" href="/favicon.svg" />
+        <meta name="theme-color" content="#0a0a0a" />
       </Head>
       <body>
         <Main />

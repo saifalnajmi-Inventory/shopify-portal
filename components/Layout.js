@@ -137,12 +137,16 @@ export default function Layout({ children }) {
 
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-100">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-          <Store size={16} className="text-white" />
+        <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center bg-black shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="36" height="36">
+            <rect width="64" height="64" rx="10" fill="#0a0a0a"/>
+            <text x="4" y="47" fontFamily="Arial Black, Arial" fontWeight="900" fontSize="38" fill="#1EB5F0" letterSpacing="-2">S</text>
+            <text x="30" y="47" fontFamily="Arial Black, Arial" fontWeight="900" fontSize="38" fill="#F5A623" letterSpacing="-2">N</text>
+          </svg>
         </div>
         <div>
           <div className="font-bold text-slate-800 text-sm leading-tight">Inventory Portal</div>
-          <div className="text-xs text-slate-400">Shopify Admin</div>
+          <div className="text-xs text-slate-400">Saif Al Najmi</div>
         </div>
       </div>
 
