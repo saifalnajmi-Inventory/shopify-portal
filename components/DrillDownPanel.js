@@ -274,8 +274,8 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
   return (
     <div className="px-4 py-3 hover:bg-slate-50 transition-colors">
 
-      {/* ── Top row: rank + image + product info ─────────────────────────── */}
-      <div className="flex items-start gap-3">
+      {/* ── Single flex row: rank + image + ALL content on right ─────────── */}
+      <div className="flex items-start gap-3 min-w-0">
         {/* Rank */}
         <span className="text-xs font-bold text-slate-300 w-5 text-center shrink-0 pt-1">{rank}</span>
 
@@ -287,15 +287,19 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
             </div>
         }
 
-        {/* Product info — takes all remaining width */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-slate-800 leading-snug">
+        {/* Right column — everything stacks here, width = flex-1 */}
+        <div className="flex-1 min-w-0 overflow-hidden">
+
+          {/* Product title + status badge */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+            <span className="text-sm font-semibold text-slate-800 leading-snug break-words">
               {item.productTitle}
             </span>
             {item.status && <StatusBadge status={item.status} />}
           </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+
+          {/* Variant / SKU / sales stats */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             {item.variantTitle && item.variantTitle !== 'Default Title' && (
               <span className="text-xs text-slate-400">{item.variantTitle}</span>
             )}
@@ -319,108 +323,108 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
               </span>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* ── Bottom row: stock badge + action buttons ─────────────────────── */}
-      <div className="mt-2 ml-8 flex items-center gap-2 flex-wrap">
+          {/* ── Action row — inside right column so it's width-constrained ── */}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
 
-        {/* Stock badge */}
-        {!isStatusCard && (
-          <div className={clsx('text-xs font-bold px-2.5 py-1 rounded-lg border shrink-0', stockColor)}>
-            {item.currentQty <= 0 ? '0 · OOS' : `${item.currentQty} left`}
-          </div>
-        )}
+            {/* Stock badge */}
+            {!isStatusCard && (
+              <div className={clsx('text-xs font-bold px-2.5 py-1 rounded-lg border shrink-0', stockColor)}>
+                {item.currentQty <= 0 ? '0 · OOS' : `${item.currentQty} left`}
+              </div>
+            )}
 
-        {/* Status action buttons */}
-        {isPushingStatus ? (
-          <span className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
-            <Loader2 size={13} className="animate-spin" /> Updating…
-          </span>
-        ) : (
-          <>
-            {item.status === 'draft' && (
-              <button className="btn-success py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('active')}>
-                <Eye size={13} /> Publish
+            {/* Status action buttons */}
+            {isPushingStatus ? (
+              <span className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+                <Loader2 size={13} className="animate-spin" /> Updating…
+              </span>
+            ) : (
+              <>
+                {item.status === 'draft' && (
+                  <button className="btn-success py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('active')}>
+                    <Eye size={13} /> Publish
+                  </button>
+                )}
+                {item.status === 'active' && (
+                  <button className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('draft')}>
+                    <EyeOff size={13} /> Set Draft
+                  </button>
+                )}
+                {item.status === 'archived' && (
+                  <button className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('draft')}>
+                    <Archive size={13} /> Unarchive
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* Rule shortcut */}
+            {pushStatus === 'idle' && !editing && !isPushingStatus && (
+              <RestockRuleButton item={item} />
+            )}
+
+            {/* Stock update button */}
+            {pushStatus === 'idle' && !editing && (
+              <button
+                className={clsx('py-1.5 px-3 text-xs', isStatusCard ? 'btn-secondary' : 'btn-primary')}
+                onClick={() => { setEditing(true); setNewQty(String(Math.max(0, item.currentQty))) }}
+              >
+                {isStatusCard ? `${item.currentQty} stock` : 'Update Stock'}
               </button>
             )}
-            {item.status === 'active' && (
-              <button className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('draft')}>
-                <EyeOff size={13} /> Set Draft
-              </button>
-            )}
-            {item.status === 'archived' && (
-              <button className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5" onClick={() => changeProductStatus('draft')}>
-                <Archive size={13} /> Unarchive
-              </button>
-            )}
-          </>
-        )}
-
-        {/* Rule shortcut */}
-        {pushStatus === 'idle' && !editing && !isPushingStatus && (
-          <RestockRuleButton item={item} />
-        )}
-
-        {/* Stock update button */}
-        {pushStatus === 'idle' && !editing && (
-          <button
-            className={clsx('py-1.5 px-3 text-xs shrink-0', isStatusCard ? 'btn-secondary' : 'btn-primary')}
-            onClick={() => { setEditing(true); setNewQty(String(Math.max(0, item.currentQty))) }}
-          >
-            {isStatusCard ? `${item.currentQty} stock` : 'Update Stock'}
-          </button>
-        )}
-      </div>
-
-      {/* Inline stock edit */}
-      {editing && pushStatus === 'idle' && (
-        <div className="mt-2 ml-8 flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2 bg-white border-2 border-indigo-300 rounded-xl px-3 py-2 shadow-sm">
-            <span className="text-xs text-slate-400 font-medium whitespace-nowrap">New stock:</span>
-            <input
-              autoFocus
-              type="number"
-              min="0"
-              className="w-20 text-base font-bold text-slate-800 focus:outline-none text-center"
-              value={newQty}
-              onChange={e => setNewQty(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter')  pushStock()
-                if (e.key === 'Escape') { setEditing(false); setNewQty('') }
-              }}
-            />
-            <span className="text-xs text-slate-400">units</span>
           </div>
-          <button className="btn-success py-2 px-4 text-sm font-semibold flex items-center gap-2" onClick={pushStock}>
-            <Send size={14} /> Push
-          </button>
-          <button className="btn-secondary py-2 px-3 text-sm" onClick={() => { setEditing(false); setNewQty('') }}>
-            Cancel
-          </button>
-        </div>
-      )}
 
-      {pushStatus === 'pushing' && (
-        <div className="mt-2 ml-8 flex items-center gap-2 text-sm text-indigo-600 font-medium">
-          <Loader2 size={15} className="animate-spin" /> Pushing to Shopify…
-        </div>
-      )}
-      {pushStatus === 'success' && (
-        <div className="mt-2 ml-8 flex items-center gap-2 text-sm text-emerald-600 font-semibold">
-          <CheckCircle2 size={15} /> Updated to {newQty} units ✓
-        </div>
-      )}
-      {pushStatus === 'failed' && (
-        <div className="mt-2 ml-8 space-y-1">
-          <div className="flex items-center gap-2 text-sm text-red-600">
-            <XCircle size={14} /> Push failed: {errMsg}
-          </div>
-          <button className="text-xs text-indigo-600 underline" onClick={() => { setPushStatus('idle'); setEditing(true) }}>
-            Try again
-          </button>
-        </div>
-      )}
+          {/* Inline stock edit */}
+          {editing && pushStatus === 'idle' && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 bg-white border-2 border-indigo-300 rounded-xl px-3 py-2 shadow-sm">
+                <span className="text-xs text-slate-400 font-medium whitespace-nowrap">New qty:</span>
+                <input
+                  autoFocus
+                  type="number"
+                  min="0"
+                  className="w-16 text-base font-bold text-slate-800 focus:outline-none text-center"
+                  value={newQty}
+                  onChange={e => setNewQty(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter')  pushStock()
+                    if (e.key === 'Escape') { setEditing(false); setNewQty('') }
+                  }}
+                />
+              </div>
+              <button className="btn-success py-2 px-4 text-sm font-semibold flex items-center gap-1.5" onClick={pushStock}>
+                <Send size={14} /> Push
+              </button>
+              <button className="btn-secondary py-2 px-3 text-sm" onClick={() => { setEditing(false); setNewQty('') }}>
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {pushStatus === 'pushing' && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-indigo-600 font-medium">
+              <Loader2 size={15} className="animate-spin" /> Pushing to Shopify…
+            </div>
+          )}
+          {pushStatus === 'success' && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-emerald-600 font-semibold">
+              <CheckCircle2 size={15} /> Updated to {newQty} units ✓
+            </div>
+          )}
+          {pushStatus === 'failed' && (
+            <div className="mt-2 space-y-1">
+              <div className="flex items-center gap-2 text-sm text-red-600">
+                <XCircle size={14} /> Push failed: {errMsg}
+              </div>
+              <button className="text-xs text-indigo-600 underline" onClick={() => { setPushStatus('idle'); setEditing(true) }}>
+                Try again
+              </button>
+            </div>
+          )}
+
+        </div>{/* end right column */}
+      </div>{/* end flex row */}
     </div>
   )
 }
@@ -473,43 +477,46 @@ function RestockRuleButton({ item }) {
     setSaving(false)
   }
 
-  // ── Expanded edit panel ──────────────────────────────────────────────────────
+  // ── Expanded edit panel — stacks on mobile ──────────────────────────────────
   if (open) return (
     <div className={clsx(
-      'flex items-center gap-2 rounded-xl px-3 py-2 border',
-      hasRule
-        ? 'bg-amber-50 border-amber-300'
-        : 'bg-amber-50 border-amber-200'
+      'rounded-xl px-3 py-2 border w-full',
+      hasRule ? 'bg-amber-50 border-amber-300' : 'bg-amber-50 border-amber-200'
     )}>
-      <Zap size={13} className="text-amber-500 shrink-0" />
-      <span className="text-xs text-slate-600 font-medium whitespace-nowrap">Alert below</span>
-      <input
-        type="number" min="1"
-        className="w-14 text-xs text-center input py-1"
-        value={form.threshold}
-        onChange={e => setForm(f => ({ ...f, threshold: e.target.value }))}
-      />
-      <span className="text-xs text-slate-500">→ restore to</span>
-      <input
-        type="number" min="1"
-        className="w-14 text-xs text-center input py-1"
-        value={form.restockTo}
-        onChange={e => setForm(f => ({ ...f, restockTo: e.target.value }))}
-      />
-      <button
-        className={clsx('text-xs px-2 py-1 rounded-lg font-semibold border transition-all', form.autoRestock
-          ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-          : 'bg-white text-slate-500 border-slate-200'
-        )}
-        onClick={() => setForm(f => ({ ...f, autoRestock: !f.autoRestock }))}
-        title="Toggle auto-push to Shopify"
-      >
-        {form.autoRestock ? '⚡ Auto' : '🔔 Alert'}
-      </button>
-      <button className="btn-success py-1 px-2 text-xs" onClick={save} disabled={saving}>
-        {saving ? <Loader2 size={11} className="animate-spin" /> : '✓ Save'}
-      </button>
-      <button className="text-slate-400 hover:text-slate-600 text-xs px-1" onClick={() => setOpen(false)}>✕</button>
+      {/* Row 1: inputs */}
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <Zap size={13} className="text-amber-500 shrink-0" />
+        <span className="text-xs text-slate-600 font-medium">Alert &lt;</span>
+        <input
+          type="number" min="1"
+          className="w-14 text-xs text-center input py-1"
+          value={form.threshold}
+          onChange={e => setForm(f => ({ ...f, threshold: e.target.value }))}
+        />
+        <span className="text-xs text-slate-500">→ restore to</span>
+        <input
+          type="number" min="1"
+          className="w-14 text-xs text-center input py-1"
+          value={form.restockTo}
+          onChange={e => setForm(f => ({ ...f, restockTo: e.target.value }))}
+        />
+      </div>
+      {/* Row 2: action buttons */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          className={clsx('text-xs px-2 py-1 rounded-lg font-semibold border transition-all', form.autoRestock
+            ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+            : 'bg-white text-slate-500 border-slate-200'
+          )}
+          onClick={() => setForm(f => ({ ...f, autoRestock: !f.autoRestock }))}
+        >
+          {form.autoRestock ? '⚡ Auto-push' : '🔔 Alert only'}
+        </button>
+        <button className="btn-success py-1 px-3 text-xs" onClick={save} disabled={saving}>
+          {saving ? <Loader2 size={11} className="animate-spin" /> : '✓ Save Rule'}
+        </button>
+        <button className="text-slate-400 hover:text-slate-600 text-xs px-1 ml-auto" onClick={() => setOpen(false)}>✕ Cancel</button>
+      </div>
     </div>
   )
 
