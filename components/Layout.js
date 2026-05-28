@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, GitPullRequest, History,
   RefreshCw, Store, Menu, X, Bell, Zap, Settings,
   CheckCircle2, Clock, AlertCircle, Wifi, Users,
-  LogOut, ShieldCheck, Shield, User, Eye, KeyRound,
+  LogOut, ShieldCheck, Shield, User, Eye, KeyRound, Crown,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -24,18 +24,19 @@ const NAV_ALL = [
   { href: '/users',         label: 'Users',          icon: Users, adminOnly: true },
 ]
 
-const ROLE_ICON  = { super_admin: ShieldCheck, client_admin: Shield, operator: Settings, manager: User, viewer: Eye }
+const ROLE_ICON  = { super_admin: ShieldCheck, client_admin: Shield, owner: Crown, operator: Settings, manager: User, viewer: Eye }
 const ROLE_COLOR = {
   super_admin:  'bg-indigo-100 text-indigo-700',
   client_admin: 'bg-purple-100 text-purple-700',
+  owner:        'bg-amber-100  text-amber-700',
   operator:     'bg-teal-100   text-teal-700',
   manager:      'bg-blue-100   text-blue-700',
   viewer:       'bg-slate-100  text-slate-600',
 }
 const ROLE_LABEL = {
   super_admin: 'Super Admin', client_admin: 'Client Admin',
-  operator: 'Operator',
-  manager: 'Manager',         viewer: 'Viewer',
+  owner: 'Owner', operator: 'Operator',
+  manager: 'Manager', viewer: 'Viewer',
 }
 
 export default function Layout({ children }) {
@@ -50,7 +51,7 @@ export default function Layout({ children }) {
   const pollRef = useRef(null)
 
   const isAdminOrCA = user?.role === 'super_admin' || user?.role === 'client_admin'
-  const canSync     = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'operator'
+  const canSync     = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'operator' || user?.role === 'owner'
   const NAV         = NAV_ALL.filter(n => !n.adminOnly || isAdminOrCA)
 
   // ── On mount: autosync + unread count (only when authenticated) ──────────────

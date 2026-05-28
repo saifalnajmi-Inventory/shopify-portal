@@ -7,7 +7,7 @@ import { useRouter }                         from 'next/router'
 import {
   Users, Plus, Trash2, RefreshCw, ShieldCheck,
   Shield, Eye, User, KeyRound, ToggleLeft, ToggleRight,
-  CheckCircle2, XCircle, Clock, Settings,
+  CheckCircle2, XCircle, Clock, Settings, Crown,
 } from 'lucide-react'
 import clsx            from 'clsx'
 import toast           from 'react-hot-toast'
@@ -18,6 +18,7 @@ import { useAuth }     from './_app'
 const ROLE_STYLE = {
   super_admin:  'bg-indigo-100 text-indigo-700 border-indigo-300',
   client_admin: 'bg-purple-100 text-purple-700 border-purple-300',
+  owner:        'bg-amber-100  text-amber-700  border-amber-300',
   operator:     'bg-teal-100   text-teal-700   border-teal-300',
   manager:      'bg-blue-100   text-blue-700   border-blue-300',
   viewer:       'bg-slate-100  text-slate-600  border-slate-300',
@@ -25,6 +26,7 @@ const ROLE_STYLE = {
 const ROLE_LABELS = {
   super_admin:  'Super Admin',
   client_admin: 'Client Admin',
+  owner:        'Owner',
   operator:     'Operator',
   manager:      'Manager',
   viewer:       'Viewer',
@@ -32,6 +34,7 @@ const ROLE_LABELS = {
 const ROLE_ICONS = {
   super_admin:  ShieldCheck,
   client_admin: Shield,
+  owner:        Crown,
   operator:     Settings,
   manager:      User,
   viewer:       Eye,
@@ -131,6 +134,7 @@ export default function UsersPage() {
               <span>
                 {role === 'super_admin'  && '— Full access, manage everything'}
                 {role === 'client_admin' && '— Manage users & settings, no sync/push'}
+                {role === 'owner'        && '— Full access except user management'}
                 {role === 'operator'     && '— Full access except user management'}
                 {role === 'manager'      && '— Sync + push inventory + reports'}
                 {role === 'viewer'       && '— Read-only dashboards'}
@@ -243,8 +247,8 @@ function UserModal({ mode, onClose, me, initial = {} }) {
   const [error,  setError]  = useState('')
 
   const availableRoles = me?.role === 'super_admin'
-    ? ['viewer', 'manager', 'operator', 'client_admin', 'super_admin']
-    : ['viewer', 'manager', 'operator', 'client_admin']
+    ? ['viewer', 'manager', 'owner', 'operator', 'client_admin', 'super_admin']
+    : ['viewer', 'manager', 'owner', 'operator', 'client_admin']
 
   async function save() {
     setError('')
@@ -323,6 +327,7 @@ function UserModal({ mode, onClose, me, initial = {} }) {
           <p className="text-xs text-slate-400 mt-1">
             {form.role === 'viewer'       && 'Read-only access. Cannot sync, push, or change settings.'}
             {form.role === 'manager'      && 'Can sync Shopify data and push inventory changes.'}
+            {form.role === 'owner'        && '👑 Full access (sync, push, settings, reports). Cannot manage users.'}
             {form.role === 'operator'     && 'Full access (sync, push, settings, reports). Cannot manage users.'}
             {form.role === 'client_admin' && 'Can manage users and settings. Cannot sync or push.'}
             {form.role === 'super_admin'  && '⚠️ Full access. Can manage all users, settings, and data.'}
