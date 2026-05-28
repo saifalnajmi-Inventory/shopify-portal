@@ -23,88 +23,29 @@ async function handler(req, res) {
     const archivedProducts = await db.product.count({ where: { status: 'archived' } })
     const totalVariants    = await db.variant.count()
 
-    // Stock counts (via variant aggregations on products)
-    const inStockVariants = await db.product.count({
-      where: { variants: { some: { inventoryQuantity: { gt: 0 } } } },
+    // Stock counts — counted per VARIANT to exactly match the drilldown numbers
+    const inStockVariants        = await db.variant.count({ where: { inventoryQuantity: { gt: 0 } } })
+    const outOfStockVariants     = await db.variant.count({ where: { inventoryQuantity: { lte: 0 } } })
+    const lowStockVariants       = await db.variant.count({ where: { inventoryQuantity: { gt: 0, lt: 3 } } })
+    const belowThresholdVariants = await db.variant.count({ where: { inventoryQuantity: { gt: 0, lt: 5 } } })
+
+    const oos7Days  = await db.variant.count({ where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { not: null, lte: ago7  } } })
+    const oos14Days = await db.variant.count({ where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { not: null, lte: ago14 } } })
+    const oos30Days = await db.variant.count({ where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { not: null, lte: ago30 } } })
+
+    const neverRestocked = await db.variant.count({
+      where: { inventoryQuantity: { lte: 0 }, totalSold: { gt: 0 }, firstOutOfStockAt: { not: null } },
     })
 
-    // Out of stock: products where ALL variants are at 0
-    const outOfStockVariants = await db.product.count({
-      where: {
-        AND: [
-          { variants: { none: { inventoryQuantity: { gt: 0 } } } },
-          { variants: { some: {} } }, // has at least one variant
-        ],
-      },
+    // Catalog quality — counted per variant to match drilldown
+    const noSalesProducts = await db.variant.count({ where: { totalSold: 0 } })
+    const recentProducts  = await db.variant.count({ where: { product: { createdAtShopify: { gte: ago30 } } } })
+    const missingImages   = await db.variant.count({ where: { product: { imageCount: 0 } } })
+    const missingSeo      = await db.variant.count({
+      where: { product: { OR: [{ seoTitle: null }, { seoTitle: '' }, { seoDescription: null }, { seoDescription: '' }] } },
     })
-
-    const lowStockVariants = await db.product.count({
-      where: { variants: { some: { inventoryQuantity: { gt: 0, lt: 3 } } } },
-    })
-
-    const belowThresholdVariants = await db.product.count({
-      where: { variants: { some: { inventoryQuantity: { gt: 0, lt: 5 } } } },
-    })
-
-    // OOS duration
-    const oos7Days = await db.product.count({
-      where: {
-        variants: {
-          some: {
-            inventoryQuantity: { lte: 0 },
-            firstOutOfStockAt: { not: null, lte: ago7 },
-          },
-        },
-      },
-    })
-
-    const oos14Days = await db.product.count({
-      where: {
-        variants: {
-          some: {
-            inventoryQuantity: { lte: 0 },
-            firstOutOfStockAt: { not: null, lte: ago14 },
-          },
-        },
-      },
-    })
-
-    const oos30Days = await db.product.count({
-      where: {
-        variants: {
-          some: {
-            inventoryQuantity: { lte: 0 },
-            firstOutOfStockAt: { not: null, lte: ago30 },
-          },
-        },
-      },
-    })
-
-    // Never restocked: has had sales, currently OOS, firstOutOfStockAt still set
-    // (meaning they went OOS and were never restocked since portal started tracking)
-    const neverRestocked = await db.product.count({
-      where: {
-        variants: {
-          some: {
-            inventoryQuantity: { lte: 0 },
-            totalSold:         { gt: 0 },
-            firstOutOfStockAt: { not: null },
-          },
-        },
-      },
-    })
-
-    // Sales intelligence
-    const noSalesProducts  = await db.product.count({
-      where: { variants: { none: { totalSold: { gt: 0 } } } },
-    })
-    const recentProducts   = await db.product.count({ where: { createdAtShopify: { gte: ago30 } } })
-    const missingImages    = await db.product.count({ where: { imageCount: 0 } })
-    const missingSeo       = await db.product.count({
-      where: { OR: [{ seoTitle: null }, { seoTitle: '' }, { seoDescription: null }, { seoDescription: '' }] },
-    })
-    const missingVendor    = await db.product.count({
-      where: { OR: [{ vendor: null }, { vendor: '' }] },
+    const missingVendor   = await db.variant.count({
+      where: { product: { OR: [{ vendor: null }, { vendor: '' }] } },
     })
 
     // Top lists
