@@ -36,7 +36,7 @@ async function handler(req, res) {
       return res.status(400).json({ error: 'Username and password are required' })
     }
 
-    const allowedRoles = ['viewer', 'manager', 'client_admin', 'super_admin']
+    const allowedRoles = ['viewer', 'manager', 'operator', 'client_admin', 'super_admin']
     const targetRole   = allowedRoles.includes(role) ? role : 'viewer'
 
     // Only super_admin can create another super_admin
