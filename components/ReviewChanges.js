@@ -145,7 +145,7 @@ export default function ReviewChanges({ changes, onRefresh }) {
       {/* ── Confirm popup ──────────────────────────────────────────────────── */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-sm w-full mx-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4 modal-scroll">
             <div className="text-center mb-4">
               <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-3">
                 <AlertCircle size={28} className="text-amber-500" />

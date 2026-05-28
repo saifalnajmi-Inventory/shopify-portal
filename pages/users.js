@@ -273,7 +273,7 @@ function UserModal({ mode, onClose, me, initial = {} }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 modal-scroll">
         <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2">
           <Users size={18} />
           {mode === 'add' ? 'Add New User' : `Edit — @${initial.username}`}

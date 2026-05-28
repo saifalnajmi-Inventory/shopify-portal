@@ -311,7 +311,7 @@ function AddRuleModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 modal-scroll">
         <h2 className="font-bold text-slate-800 text-lg">Add Auto-Restock Rule</h2>
 
         <div>
