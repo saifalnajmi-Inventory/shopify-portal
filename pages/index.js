@@ -14,6 +14,7 @@ import {
 import DashboardCard    from '../components/DashboardCard'
 import QuickStockCard   from '../components/QuickStockCard'
 import DrillDownPanel   from '../components/DrillDownPanel'
+import InsightsPanel    from '../components/InsightsPanel'
 import { formatDistanceToNow } from 'date-fns'
 
 // Map card key → DrillDownPanel title
@@ -113,6 +114,9 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* ── Insights Intelligence Panel ─────────────────────────────────── */}
+      <InsightsPanel cards={cards} onOpenCard={openCard} />
 
       {/* ── Mobile health bar (hidden on desktop) ───────────────────────── */}
       <div className="sm:hidden -mx-4 px-4 overflow-x-auto">
