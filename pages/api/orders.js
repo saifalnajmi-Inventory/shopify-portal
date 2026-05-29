@@ -51,7 +51,7 @@ export default withAuth(async function handler(req, res) {
   const where = buildWhere(tab, search)
 
   // Fetch current page + total + tab counts + cancelled value sum in parallel
-  const [orders, total, allCount, unfulfilledCount, unpaidCount, cancelledCount, cancelledValueRows] = await Promise.all([
+  const [orders, total, allCount, unfulfilledCount, unpaidCount, cancelledCount, cancelledValueRows, allValueRows] = await Promise.all([
     db.order.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -88,9 +88,11 @@ export default withAuth(async function handler(req, res) {
     db.order.count({ where: buildWhere('unpaid',      '') }),
     db.order.count({ where: buildWhere('cancelled',   '') }),
     db.$queryRaw`SELECT COALESCE(SUM(CAST("totalPrice" AS REAL)), 0) as total FROM "Order" WHERE "cancelledAt" IS NOT NULL`,
+    db.$queryRaw`SELECT COALESCE(SUM(CAST("totalPrice" AS REAL)), 0) as total FROM "Order"`,
   ])
 
   const cancelledTotalValue = parseFloat(String(cancelledValueRows[0]?.total ?? 0))
+  const allTotalValue       = parseFloat(String(allValueRows[0]?.total       ?? 0))
 
   return res.json({
     orders,
@@ -98,6 +100,7 @@ export default withAuth(async function handler(req, res) {
     page:    pageNum,
     hasMore: skip + orders.length < total,
     cancelledTotalValue,
+    allTotalValue,
     tabs: {
       all:         allCount,
       unfulfilled: unfulfilledCount,

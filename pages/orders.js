@@ -76,6 +76,7 @@ export default function OrdersPage() {
   const [search,             setSearch]             = useState('')
   const [tabCounts,          setTabCounts]          = useState({})
   const [cancelledTotalValue, setCancelledTotalValue] = useState(0)
+  const [allTotalValue,       setAllTotalValue]       = useState(0)
 
   const load = useCallback(async (p = 1) => {
     setLoading(true)
@@ -87,6 +88,7 @@ export default function OrdersPage() {
     setTotal(data.total     || 0)
     setTabCounts(data.tabs  || {})
     if (data.cancelledTotalValue != null) setCancelledTotalValue(data.cancelledTotalValue)
+    if (data.allTotalValue       != null) setAllTotalValue(data.allTotalValue)
     setLoading(false)
   }, [tab, search])
 
@@ -140,6 +142,27 @@ export default function OrdersPage() {
           ))}
         </div>
       </div>
+
+      {/* ── All orders total value summary ────────────────────────────────── */}
+      {tab === 'all' && (
+        <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl bg-indigo-900 text-white">
+          <div className="flex items-center gap-2.5">
+            <ShoppingBag size={18} className="text-indigo-300 shrink-0" />
+            <div>
+              <div className="text-xs text-indigo-300 font-medium uppercase tracking-wide">All Orders</div>
+              <div className="text-lg font-bold text-white leading-tight">
+                {(tabCounts.all || 0).toLocaleString()}
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-indigo-300 font-medium uppercase tracking-wide">Total Revenue</div>
+            <div className="text-2xl font-bold text-indigo-200 leading-tight">
+              KWD {allTotalValue.toLocaleString('en', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Cancelled total value summary ─────────────────────────────────── */}
       {tab === 'cancelled' && (
