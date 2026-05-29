@@ -96,15 +96,6 @@ function genInsights(cards) {
     action:   'Add images',
   })
 
-  if (cards.missingSeo > 0) items.push({
-    priority: 'info',
-    icon:     FileSearch,
-    title:    `${cards.missingSeo} products are missing SEO metadata`,
-    detail:   'Missing title/description reduces organic search visibility.',
-    cardKey:  'missingSeo',
-    action:   'Optimize SEO',
-  })
-
   if (cards.missingVendor > 0) items.push({
     priority: 'info',
     icon:     Tag,
