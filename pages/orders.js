@@ -4,6 +4,7 @@
  * so you can immediately see which items need to be zeroed or set to draft.
  */
 import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from './_app'
 import {
   ShoppingBag, RefreshCw, Search, X, Package,
   AlertTriangle, XCircle,
@@ -68,6 +69,9 @@ const TABS = [
 ]
 
 export default function OrdersPage() {
+  const { user }             = useAuth()
+  const isSuperAdmin         = user?.role === 'super_admin'
+
   const [tab,                setTab]                = useState('all')
   const [orders,             setOrders]             = useState([])
   const [total,              setTotal]              = useState(0)
@@ -143,8 +147,8 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* ── All orders total value summary ────────────────────────────────── */}
-      {tab === 'all' && (
+      {/* ── All orders total value summary — super admin only ────────────── */}
+      {tab === 'all' && isSuperAdmin && (
         <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl bg-indigo-900 text-white">
           <div className="flex items-center gap-2.5">
             <ShoppingBag size={18} className="text-indigo-300 shrink-0" />
@@ -164,8 +168,8 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* ── Cancelled total value summary ─────────────────────────────────── */}
-      {tab === 'cancelled' && (
+      {/* ── Cancelled total value summary — super admin only ─────────────── */}
+      {tab === 'cancelled' && isSuperAdmin && (
         <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl bg-slate-800 text-white">
           <div className="flex items-center gap-2.5">
             <XCircle size={18} className="text-red-400 shrink-0" />
