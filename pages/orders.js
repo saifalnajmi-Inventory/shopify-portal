@@ -68,13 +68,14 @@ const TABS = [
 ]
 
 export default function OrdersPage() {
-  const [tab,       setTab]       = useState('all')
-  const [orders,    setOrders]    = useState([])
-  const [total,     setTotal]     = useState(0)
-  const [page,      setPage]      = useState(1)
-  const [loading,   setLoading]   = useState(true)
-  const [search,    setSearch]    = useState('')
-  const [tabCounts, setTabCounts] = useState({})
+  const [tab,                setTab]                = useState('all')
+  const [orders,             setOrders]             = useState([])
+  const [total,              setTotal]              = useState(0)
+  const [page,               setPage]               = useState(1)
+  const [loading,            setLoading]            = useState(true)
+  const [search,             setSearch]             = useState('')
+  const [tabCounts,          setTabCounts]          = useState({})
+  const [cancelledTotalValue, setCancelledTotalValue] = useState(0)
 
   const load = useCallback(async (p = 1) => {
     setLoading(true)
@@ -85,6 +86,7 @@ export default function OrdersPage() {
     setOrders(data.orders   || [])
     setTotal(data.total     || 0)
     setTabCounts(data.tabs  || {})
+    if (data.cancelledTotalValue != null) setCancelledTotalValue(data.cancelledTotalValue)
     setLoading(false)
   }, [tab, search])
 
@@ -138,6 +140,27 @@ export default function OrdersPage() {
           ))}
         </div>
       </div>
+
+      {/* ── Cancelled total value summary ─────────────────────────────────── */}
+      {tab === 'cancelled' && (
+        <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl bg-slate-800 text-white">
+          <div className="flex items-center gap-2.5">
+            <XCircle size={18} className="text-red-400 shrink-0" />
+            <div>
+              <div className="text-xs text-slate-400 font-medium uppercase tracking-wide">Cancelled Orders</div>
+              <div className="text-lg font-bold text-white leading-tight">
+                {(tabCounts.cancelled || 0).toLocaleString()}
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-slate-400 font-medium uppercase tracking-wide">Total Cancelled Value</div>
+            <div className="text-2xl font-bold text-red-300 leading-tight">
+              KWD {cancelledTotalValue.toLocaleString('en', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Cancelled tab hint ─────────────────────────────────────────────── */}
       {tab === 'cancelled' && (
