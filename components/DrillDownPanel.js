@@ -189,9 +189,71 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
   const [hasRule,       setHasRule]       = useState(!!item.hasRestockRule)
   const [ruleData,      setRuleData]      = useState(item.restockRule || null)
   const [awaitActivate, setAwaitActivate] = useState(false)  // "also activate?" prompt
+  const [zeroStatus,    setZeroStatus]    = useState(null)   // null | 'pushing' | 'success' | 'failed'
+  const [zeroMsg,       setZeroMsg]       = useState('')
+  const [zeroMode,      setZeroMode]      = useState(null)   // 'stock' | 'draft' | 'both' — tracks which action ran
 
   const isStatusCard    = STATUS_CARDS.has(card)
   const isPushingStatus = statusAction !== null
+
+  // ── Zero stock / deactivate actions (Active Products card only) ──────────────
+  async function zeroStock(mode) {
+    // mode: 'stock' = zero inventory only
+    //       'draft' = set draft only
+    //       'both'  = zero inventory + set draft
+    setZeroStatus('pushing')
+    setZeroMode(mode)
+    setZeroMsg('')
+    try {
+      if (mode === 'stock' || mode === 'both') {
+        const res  = await fetch('/api/quickpush', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            productId:   item.productId,
+            variantId:   item.variantId,
+            entityName:  item.productTitle,
+            variantName: item.variantTitle,
+            sku:         item.sku,
+            fieldName:   'inventory_quantity',
+            beforeValue: item.currentQty,
+            afterValue:  0,
+            changeType:  'inventory',
+          }),
+        })
+        const data = await res.json()
+        if (!data.ok) throw new Error(data.error || 'Stock push failed')
+      }
+
+      if (mode === 'draft' || mode === 'both') {
+        const res  = await fetch('/api/quickpush', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            productId:   item.productId,
+            entityName:  item.productTitle,
+            fieldName:   'status',
+            beforeValue: 'active',
+            afterValue:  'draft',
+            changeType:  'status',
+          }),
+        })
+        const data = await res.json()
+        if (!data.ok) throw new Error(data.error || 'Draft change failed')
+      }
+
+      setZeroStatus('success')
+      const msg = mode === 'both'  ? `Zeroed & set to draft`
+                : mode === 'stock' ? `Stock set to 0`
+                :                    `Set to draft`
+      toast.success(`✅ ${item.productTitle} — ${msg}`)
+      setTimeout(() => { setZeroStatus(null); setZeroMode(null); onSuccess?.() }, 1800)
+    } catch (e) {
+      setZeroStatus('failed')
+      setZeroMsg(e.message)
+      toast.error(e.message)
+    }
+  }
 
   // ── Step 1: Push button pressed — ask if non-active product should be activated ──
   function triggerPush() {
@@ -349,69 +411,122 @@ function DrillDownRow({ rank, item, card, onSuccess }) {
         <div className="mt-3">
 
           {/* Normal state: buttons */}
-          {!editing && pushStatus === 'idle' && (
-            <div className="flex gap-2">
+          {!editing && pushStatus === 'idle' && !zeroStatus && (
+            <>
+              <div className="flex gap-2">
 
-              {/* Status toggle button */}
-              {isPushingStatus ? (
-                <span className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
-                  <Loader2 size={12} className="animate-spin" /> Updating…
-                </span>
-              ) : (
-                <>
-                  {item.status === 'draft' && (
-                    <button
-                      className="btn-success flex-1 py-2.5 text-xs"
-                      onClick={() => changeProductStatus('active')}
-                    >
-                      <Eye size={13} /> Publish
-                    </button>
-                  )}
-                  {item.status === 'active' && (
-                    <button
-                      className="btn-secondary flex-1 py-2.5 text-xs"
-                      onClick={() => changeProductStatus('draft')}
-                    >
-                      <EyeOff size={13} /> Set Draft
-                    </button>
-                  )}
-                  {item.status === 'archived' && (
-                    <button
-                      className="btn-secondary flex-1 py-2.5 text-xs"
-                      onClick={() => changeProductStatus('draft')}
-                    >
-                      <Archive size={13} /> Unarchive
-                    </button>
-                  )}
-                </>
-              )}
+                {/* Status toggle button */}
+                {isPushingStatus ? (
+                  <span className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+                    <Loader2 size={12} className="animate-spin" /> Updating…
+                  </span>
+                ) : (
+                  <>
+                    {item.status === 'draft' && (
+                      <button
+                        className="btn-success flex-1 py-2.5 text-xs"
+                        onClick={() => changeProductStatus('active')}
+                      >
+                        <Eye size={13} /> Publish
+                      </button>
+                    )}
+                    {item.status === 'active' && (
+                      <button
+                        className="btn-secondary flex-1 py-2.5 text-xs"
+                        onClick={() => changeProductStatus('draft')}
+                      >
+                        <EyeOff size={13} /> Set Draft
+                      </button>
+                    )}
+                    {item.status === 'archived' && (
+                      <button
+                        className="btn-secondary flex-1 py-2.5 text-xs"
+                        onClick={() => changeProductStatus('draft')}
+                      >
+                        <Archive size={13} /> Unarchive
+                      </button>
+                    )}
+                  </>
+                )}
 
-              {/* Rule button */}
-              {!isPushingStatus && (
-                <button
-                  className={clsx(
-                    'py-2.5 px-3 rounded-xl text-xs font-bold border flex items-center gap-1 shrink-0 transition-colors',
-                    hasRule
-                      ? 'bg-amber-500 text-white border-amber-600'
-                      : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'
-                  )}
-                  onClick={() => setRuleOpen(true)}
-                  title="Auto-restock rule"
-                >
-                  <Zap size={12} />
-                  {hasRule ? '✓' : 'Rule'}
-                </button>
-              )}
+                {/* Rule button */}
+                {!isPushingStatus && (
+                  <button
+                    className={clsx(
+                      'py-2.5 px-3 rounded-xl text-xs font-bold border flex items-center gap-1 shrink-0 transition-colors',
+                      hasRule
+                        ? 'bg-amber-500 text-white border-amber-600'
+                        : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'
+                    )}
+                    onClick={() => setRuleOpen(true)}
+                    title="Auto-restock rule"
+                  >
+                    <Zap size={12} />
+                    {hasRule ? '✓' : 'Rule'}
+                  </button>
+                )}
 
-              {/* Update stock / stock count */}
-              {!isPushingStatus && (
-                <button
-                  className={clsx('flex-1 py-2.5 text-xs font-semibold rounded-xl', isStatusCard ? 'btn-secondary' : 'btn-primary')}
-                  onClick={() => { setEditing(true); setNewQty(String(Math.max(0, item.currentQty))) }}
-                >
-                  {isStatusCard ? `${item.currentQty} in stock` : 'Update Stock'}
-                </button>
+                {/* Update stock / stock count */}
+                {!isPushingStatus && (
+                  <button
+                    className={clsx('flex-1 py-2.5 text-xs font-semibold rounded-xl', isStatusCard ? 'btn-secondary' : 'btn-primary')}
+                    onClick={() => { setEditing(true); setNewQty(String(Math.max(0, item.currentQty))) }}
+                  >
+                    {isStatusCard ? `${item.currentQty} in stock` : 'Update Stock'}
+                  </button>
+                )}
+              </div>
+
+              {/* ── Deactivation row — Active Products card only ────────────── */}
+              {card === 'activeProducts' && !isPushingStatus && (
+                <div className="mt-2 flex gap-2">
+                  <button
+                    className="flex-1 py-2 px-3 text-xs font-semibold rounded-xl border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 flex items-center justify-center gap-1.5 transition-colors"
+                    onClick={() => zeroStock('stock')}
+                    title="Set inventory to 0 — product stays active on store"
+                  >
+                    <Package size={12} /> Set Stock to 0
+                  </button>
+                  <button
+                    className="flex-1 py-2 px-3 text-xs font-semibold rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 flex items-center justify-center gap-1.5 transition-colors"
+                    onClick={() => zeroStock('both')}
+                    title="Set stock to 0 AND move to draft — removes from storefront"
+                  >
+                    <EyeOff size={12} /> Zero + Draft
+                  </button>
+                </div>
               )}
+            </>
+          )}
+
+          {/* Zero action status */}
+          {zeroStatus === 'pushing' && (
+            <div className="flex items-center gap-2 text-sm text-indigo-600 font-medium py-1">
+              <Loader2 size={15} className="animate-spin" />
+              {zeroMode === 'both'  ? 'Zeroing stock & setting to draft…'
+               : zeroMode === 'stock' ? 'Setting stock to 0…'
+               :                       'Setting to draft…'}
+            </div>
+          )}
+          {zeroStatus === 'success' && (
+            <div className="flex items-center gap-2 text-sm text-emerald-600 font-semibold py-1">
+              <CheckCircle2 size={15} />
+              {zeroMode === 'both'  ? 'Stock zeroed & moved to draft ✓'
+               : zeroMode === 'stock' ? 'Stock set to 0 ✓'
+               :                       'Set to draft ✓'}
+            </div>
+          )}
+          {zeroStatus === 'failed' && (
+            <div className="space-y-1 py-1">
+              <div className="flex items-center gap-2 text-sm text-red-600">
+                <XCircle size={14} /> Failed: {zeroMsg}
+              </div>
+              <button
+                className="text-xs text-indigo-600 underline"
+                onClick={() => { setZeroStatus(null); setZeroMode(null) }}
+              >
+                Try again
+              </button>
             </div>
           )}
 
