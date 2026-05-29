@@ -90,12 +90,14 @@ model Order {
   id                String    @id
   orderNumber       Int
   email             String?
+  customerName      String?
   totalPrice        Float
   financialStatus   String
   fulfillmentStatus String?
   createdAt         DateTime
   processedAt       DateTime?
   cancelledAt       DateTime?
+  cancelReason      String?
 
   lineItems OrderLineItem[]
 }

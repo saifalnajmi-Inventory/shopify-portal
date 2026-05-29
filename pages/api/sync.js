@@ -235,8 +235,10 @@ async function handler(req, res) {
       const orders = await fetchAllOrders()
 
       for (const o of orders) {
-        if (o.cancelled_at) continue
-        ordersCount++
+        const isCancelled  = !!o.cancelled_at
+        const customerName = o.customer
+          ? [o.customer.first_name, o.customer.last_name].filter(Boolean).join(' ') || null
+          : null
 
         await db.order.upsert({
           where:  { id: String(o.id) },
@@ -244,45 +246,54 @@ async function handler(req, res) {
             totalPrice:        parseFloat(o.total_price) || 0,
             financialStatus:   o.financial_status,
             fulfillmentStatus: o.fulfillment_status || null,
-            cancelledAt:       null,
+            cancelledAt:       isCancelled ? new Date(o.cancelled_at) : null,
+            cancelReason:      o.cancel_reason || null,
+            customerName,
           },
           create: {
             id:                String(o.id),
             orderNumber:       o.order_number,
-            email:             o.email            || null,
+            email:             o.email       || null,
+            customerName,
             totalPrice:        parseFloat(o.total_price) || 0,
             financialStatus:   o.financial_status,
             fulfillmentStatus: o.fulfillment_status || null,
             createdAt:         new Date(o.created_at),
             processedAt:       o.processed_at ? new Date(o.processed_at) : null,
-            cancelledAt:       null,
+            cancelledAt:       isCancelled ? new Date(o.cancelled_at) : null,
+            cancelReason:      o.cancel_reason || null,
           },
         })
 
-        for (const li of o.line_items || []) {
-          const variantId = li.variant_id ? String(li.variant_id) : null
-          let linkedVariantId = null
-          if (variantId) {
-            const vExists = await db.variant.findUnique({ where: { id: variantId } })
-            if (vExists) linkedVariantId = variantId
-          }
+        // Only store line items for non-cancelled orders so sales stats stay accurate
+        if (!isCancelled) {
+          ordersCount++
 
-          await db.orderLineItem.upsert({
-            where:  { id: String(li.id) },
-            update: { quantity: li.quantity, price: parseFloat(li.price) || 0, variantId: linkedVariantId },
-            create: {
-              id:          String(li.id),
-              orderId:     String(o.id),
-              variantId:   linkedVariantId,
-              productId:   li.product_id ? String(li.product_id) : null,
-              title:       li.title,
-              variantTitle: li.variant_title || null,
-              quantity:    li.quantity,
-              price:       parseFloat(li.price) || 0,
-              sku:         li.sku     || null,
-              createdAt:   new Date(o.created_at),
-            },
-          })
+          for (const li of o.line_items || []) {
+            const variantId = li.variant_id ? String(li.variant_id) : null
+            let linkedVariantId = null
+            if (variantId) {
+              const vExists = await db.variant.findUnique({ where: { id: variantId } })
+              if (vExists) linkedVariantId = variantId
+            }
+
+            await db.orderLineItem.upsert({
+              where:  { id: String(li.id) },
+              update: { quantity: li.quantity, price: parseFloat(li.price) || 0, variantId: linkedVariantId },
+              create: {
+                id:          String(li.id),
+                orderId:     String(o.id),
+                variantId:   linkedVariantId,
+                productId:   li.product_id ? String(li.product_id) : null,
+                title:       li.title,
+                variantTitle: li.variant_title || null,
+                quantity:    li.quantity,
+                price:       parseFloat(li.price) || 0,
+                sku:         li.sku     || null,
+                createdAt:   new Date(o.created_at),
+              },
+            })
+          }
         }
       }
     } catch (e) {

@@ -6,6 +6,7 @@ import {
   RefreshCw, Store, Menu, X, Bell, Zap, Settings,
   CheckCircle2, Clock, AlertCircle, Wifi, Users,
   LogOut, ShieldCheck, Shield, User, Eye, KeyRound, Crown,
+  ShoppingBag,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -16,6 +17,7 @@ import { useAuth } from '../pages/_app'
 const NAV_ALL = [
   { href: '/',              label: 'Dashboard',      icon: LayoutDashboard },
   { href: '/products',      label: 'Products',       icon: Package          },
+  { href: '/orders',        label: 'Orders',         icon: ShoppingBag      },
   { href: '/changes',       label: 'Review Changes', icon: GitPullRequest   },
   { href: '/change-log',    label: 'Change Log',     icon: History          },
   { href: '/notifications', label: 'Notifications',  icon: Bell, badgeKey: 'unread' },
