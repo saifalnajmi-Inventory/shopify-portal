@@ -50,6 +50,10 @@ async function handler(req, res) {
     draftProducts:   { where: { product: { status: 'draft' } },                                               orderBy: { sold30Days: 'desc' } },
     activeProducts:  { where: { product: { status: 'active' } },                                              orderBy: { sold30Days: 'desc' } },
     archivedProducts:{ where: { product: { status: 'archived' } },                                            orderBy: { sold30Days: 'desc' } },
+    // Went OOS buckets
+    wentOosLast30:   { where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { gte: subDays(new Date(), 30) } },                                           orderBy: { firstOutOfStockAt: 'desc' } },
+    wentOos31to60:   { where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { gte: subDays(new Date(), 60), lt: subDays(new Date(), 30) } },              orderBy: { firstOutOfStockAt: 'desc' } },
+    wentOos61to90:   { where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { gte: subDays(new Date(), 90), lt: subDays(new Date(), 60) } },              orderBy: { firstOutOfStockAt: 'desc' } },
   }
 
   const def = CARDS[card]

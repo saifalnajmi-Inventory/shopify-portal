@@ -9,7 +9,7 @@ import {
   TrendingDown, AlertTriangle, Clock,
   Star, Zap, BarChart2, FileImage,
   FileSearch, Tag, RefreshCw, Calendar, Layers,
-  BadgeAlert, Archive, ShieldOff
+  BadgeAlert, Archive, ShieldOff, Activity
 } from 'lucide-react'
 import DashboardCard    from '../components/DashboardCard'
 import QuickStockCard   from '../components/QuickStockCard'
@@ -32,9 +32,12 @@ const CARD_TITLES = {
   missingImages:   'Products Missing Images',
   missingSeo:      'Products Missing SEO',
   missingVendor:   'Products Missing Vendor / Brand',
-  draftProducts:   'Draft Products — Publish to Shopify',
-  activeProducts:  'Active Products — Set to Draft',
-  archivedProducts:'Archived Products',
+  draftProducts:    'Draft Products — Publish to Shopify',
+  activeProducts:   'Active Products — Set to Draft',
+  archivedProducts: 'Archived Products',
+  wentOosLast30:    'Went Out of Stock — Last 30 Days',
+  wentOos31to60:    'Went Out of Stock — 31 to 60 Days Ago',
+  wentOos61to90:    'Went Out of Stock — 61 to 90 Days Ago',
 }
 
 export default function Dashboard() {
@@ -329,7 +332,41 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* ── Section 5: Quick Stock Update lists ─────────────────────────── */}
+      {/* ── Section 5: Went Out of Stock Timeline ──────────────────────── */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1">
+          Went Out of Stock
+        </h2>
+        <p className="text-xs text-slate-400 mb-4">Products that became out of stock within each time window — click to restock</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <DashboardCard
+            title="Last 30 Days"
+            value={cards.wentOosLast30}
+            icon={Activity} color="red"
+            subtitle="Most recent stockouts"
+            badge={cards.wentOosLast30 > 0 ? { label: 'Recent', className: 'badge-red' } : null}
+            onClick={() => openCard('wentOosLast30')}
+          />
+          <DashboardCard
+            title="31 – 60 Days Ago"
+            value={cards.wentOos31to60}
+            icon={Activity} color="orange"
+            subtitle="Stockouts from last month"
+            badge={cards.wentOos31to60 > 0 ? { label: 'Aging', className: 'badge-yellow' } : null}
+            onClick={() => openCard('wentOos31to60')}
+          />
+          <DashboardCard
+            title="61 – 90 Days Ago"
+            value={cards.wentOos61to90}
+            icon={Activity} color="amber"
+            subtitle="Stockouts from 2 months ago"
+            badge={cards.wentOos61to90 > 0 ? { label: 'Old', className: 'badge-yellow' } : null}
+            onClick={() => openCard('wentOos61to90')}
+          />
+        </div>
+      </section>
+
+      {/* ── Section 6: Quick Stock Update lists ─────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">

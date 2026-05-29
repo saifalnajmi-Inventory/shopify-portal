@@ -15,6 +15,8 @@ async function handler(req, res) {
     const ago7  = subDays(now, 7)
     const ago14 = subDays(now, 14)
     const ago30 = subDays(now, 30)
+    const ago60 = subDays(now, 60)
+    const ago90 = subDays(now, 90)
 
     // Run queries sequentially in groups to avoid SQLite locking
     const totalProducts    = await db.product.count()
@@ -35,6 +37,17 @@ async function handler(req, res) {
 
     const neverRestocked = await db.variant.count({
       where: { inventoryQuantity: { lte: 0 }, totalSold: { gt: 0 }, firstOutOfStockAt: { not: null } },
+    })
+
+    // "Went OOS" buckets — products that became out of stock within each time window
+    const wentOosLast30  = await db.variant.count({
+      where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { gte: ago30 } },
+    })
+    const wentOos31to60  = await db.variant.count({
+      where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { gte: ago60, lt: ago30 } },
+    })
+    const wentOos61to90  = await db.variant.count({
+      where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { gte: ago90, lt: ago60 } },
     })
 
     // Catalog quality — counted per variant to match drilldown
@@ -105,6 +118,7 @@ async function handler(req, res) {
         belowThresholdVariants, oos7Days, oos14Days, oos30Days,
         neverRestocked,
         noSalesProducts, recentProducts, missingImages, missingSeo, missingVendor,
+        wentOosLast30, wentOos31to60, wentOos61to90,
       },
       lists: {
         bestSelling:      bestSelling.map(normalise),
