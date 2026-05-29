@@ -265,35 +265,36 @@ async function handler(req, res) {
           },
         })
 
-        // Only store line items for non-cancelled orders so sales stats stay accurate
-        if (!isCancelled) {
-          ordersCount++
+        // Count fulfilled orders for the sync log
+        if (!isCancelled) ordersCount++
 
-          for (const li of o.line_items || []) {
-            const variantId = li.variant_id ? String(li.variant_id) : null
-            let linkedVariantId = null
-            if (variantId) {
-              const vExists = await db.variant.findUnique({ where: { id: variantId } })
-              if (vExists) linkedVariantId = variantId
-            }
-
-            await db.orderLineItem.upsert({
-              where:  { id: String(li.id) },
-              update: { quantity: li.quantity, price: parseFloat(li.price) || 0, variantId: linkedVariantId },
-              create: {
-                id:          String(li.id),
-                orderId:     String(o.id),
-                variantId:   linkedVariantId,
-                productId:   li.product_id ? String(li.product_id) : null,
-                title:       li.title,
-                variantTitle: li.variant_title || null,
-                quantity:    li.quantity,
-                price:       parseFloat(li.price) || 0,
-                sku:         li.sku     || null,
-                createdAt:   new Date(o.created_at),
-              },
-            })
+        // Store line items for ALL orders (cancelled too) so we can show
+        // what was ordered on the Cancelled Orders page.
+        // Sales stats queries filter out cancelled orders via the order relation.
+        for (const li of o.line_items || []) {
+          const variantId = li.variant_id ? String(li.variant_id) : null
+          let linkedVariantId = null
+          if (variantId) {
+            const vExists = await db.variant.findUnique({ where: { id: variantId } })
+            if (vExists) linkedVariantId = variantId
           }
+
+          await db.orderLineItem.upsert({
+            where:  { id: String(li.id) },
+            update: { quantity: li.quantity, price: parseFloat(li.price) || 0, variantId: linkedVariantId },
+            create: {
+              id:           String(li.id),
+              orderId:      String(o.id),
+              variantId:    linkedVariantId,
+              productId:    li.product_id ? String(li.product_id) : null,
+              title:        li.title,
+              variantTitle: li.variant_title || null,
+              quantity:     li.quantity,
+              price:        parseFloat(li.price) || 0,
+              sku:          li.sku     || null,
+              createdAt:    new Date(o.created_at),
+            },
+          })
         }
       }
     } catch (e) {
@@ -309,11 +310,13 @@ async function handler(req, res) {
     const allVariants = await db.variant.findMany({ include: { product: true } })
 
     for (const v of allVariants) {
+      // Exclude line items from cancelled orders so stats only count real sales
+      const notCancelled = { order: { cancelledAt: null } }
       const [totalSold, sold30, sold7, lastOrder] = await Promise.all([
-        db.orderLineItem.aggregate({ where: { variantId: v.id }, _sum: { quantity: true } }),
-        db.orderLineItem.aggregate({ where: { variantId: v.id, createdAt: { gte: ago30 } }, _sum: { quantity: true } }),
-        db.orderLineItem.aggregate({ where: { variantId: v.id, createdAt: { gte: ago7 } },  _sum: { quantity: true } }),
-        db.orderLineItem.findFirst({ where: { variantId: v.id }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+        db.orderLineItem.aggregate({ where: { variantId: v.id, ...notCancelled }, _sum: { quantity: true } }),
+        db.orderLineItem.aggregate({ where: { variantId: v.id, createdAt: { gte: ago30 }, ...notCancelled }, _sum: { quantity: true } }),
+        db.orderLineItem.aggregate({ where: { variantId: v.id, createdAt: { gte: ago7  }, ...notCancelled }, _sum: { quantity: true } }),
+        db.orderLineItem.findFirst({ where: { variantId: v.id, ...notCancelled }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
       ])
 
       const totalSoldVal = totalSold._sum.quantity || 0

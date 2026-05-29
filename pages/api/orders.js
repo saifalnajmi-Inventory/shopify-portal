@@ -59,8 +59,24 @@ export default withAuth(async function handler(req, res) {
       take,
       include: {
         lineItems: {
-          select: { id: true, title: true, variantTitle: true, quantity: true, price: true },
-          take:   3,
+          select: {
+            id:          true,
+            title:       true,
+            variantTitle: true,
+            quantity:    true,
+            price:       true,
+            sku:         true,
+            variantId:   true,
+            // Pull current stock + product image so the cancelled orders page
+            // can show "this is why the order was cancelled"
+            variant: {
+              select: {
+                inventoryQuantity: true,
+                product: { select: { firstImageSrc: true } },
+              },
+            },
+          },
+          take: 10,
         },
         _count: { select: { lineItems: true } },
       },
