@@ -243,20 +243,20 @@ export default function NotificationsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
-        <Filter size={14} className="text-slate-400" />
-        <select className="input py-1.5 text-sm w-36" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+        <Filter size={14} className="text-slate-400 shrink-0" />
+        <select className="input py-1.5 text-sm flex-1 min-w-[120px] sm:flex-none sm:w-36" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="">All statuses</option>
           <option value="unread">Unread</option>
           <option value="read">Read</option>
           <option value="resolved">Resolved</option>
         </select>
-        <select className="input py-1.5 text-sm w-44" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
+        <select className="input py-1.5 text-sm flex-1 min-w-[130px] sm:flex-none sm:w-44" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
           <option value="">All severities</option>
           <option value="critical">Critical</option>
           <option value="warning">Warning</option>
           <option value="info">Info</option>
         </select>
-        <select className="input py-1.5 text-sm w-48" value={filterType} onChange={e => setFilterType(e.target.value)}>
+        <select className="input py-1.5 text-sm flex-1 min-w-[140px] sm:flex-none sm:w-48" value={filterType} onChange={e => setFilterType(e.target.value)}>
           <option value="">All types</option>
           {Object.entries(TYPE_META).map(([key, { label }]) => (
             <option key={key} value={key}>{label}</option>
@@ -408,29 +408,33 @@ export default function NotificationsPage() {
                     return (
                       <div className="px-4 pb-3">
                         {su?.open ? (
-                          <div className="flex items-center gap-2 p-2 bg-indigo-50 rounded-xl border border-indigo-200">
-                            <PackagePlus size={14} className="text-indigo-500 shrink-0" />
-                            <span className="text-xs text-indigo-700 font-medium shrink-0">Set stock to</span>
-                            <input
-                              type="number"
-                              min="0"
-                              value={su.qty}
-                              onChange={e => setStockUpdates(prev => ({ ...prev, [n.id]: { ...prev[n.id], qty: e.target.value } }))}
-                              onKeyDown={e => { if (e.key === 'Enter') pushStockUpdate(n); if (e.key === 'Escape') closeStockUpdate(n.id) }}
-                              className="w-20 text-sm font-bold text-center rounded-lg border border-indigo-300 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                              autoFocus
-                            />
-                            <button
-                              onClick={() => pushStockUpdate(n)}
-                              disabled={su.pushing}
-                              className="flex items-center gap-1 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-                            >
-                              {su.pushing
-                                ? <RefreshCw size={11} className="animate-spin" />
-                                : <Send size={11} />}
-                              {su.pushing ? 'Pushing…' : 'Push'}
-                            </button>
-                            <button onClick={() => closeStockUpdate(n.id)} className="text-xs text-slate-400 hover:text-slate-600 ml-auto">✕</button>
+                          <div className="flex flex-wrap items-center gap-2 p-2 bg-indigo-50 rounded-xl border border-indigo-200">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <PackagePlus size={14} className="text-indigo-500 shrink-0" />
+                              <span className="text-xs text-indigo-700 font-medium shrink-0">Set stock to</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={su.qty}
+                                onChange={e => setStockUpdates(prev => ({ ...prev, [n.id]: { ...prev[n.id], qty: e.target.value } }))}
+                                onKeyDown={e => { if (e.key === 'Enter') pushStockUpdate(n); if (e.key === 'Escape') closeStockUpdate(n.id) }}
+                                className="w-20 text-sm font-bold text-center rounded-lg border border-indigo-300 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                autoFocus
+                              />
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => pushStockUpdate(n)}
+                                disabled={su.pushing}
+                                className="flex items-center gap-1 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                              >
+                                {su.pushing
+                                  ? <RefreshCw size={11} className="animate-spin" />
+                                  : <Send size={11} />}
+                                {su.pushing ? 'Pushing…' : 'Push'}
+                              </button>
+                              <button onClick={() => closeStockUpdate(n.id)} className="text-xs text-slate-400 hover:text-slate-600">✕</button>
+                            </div>
                           </div>
                         ) : (
                           <button

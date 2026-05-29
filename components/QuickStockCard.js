@@ -129,7 +129,7 @@ function QuickStockRow({ rank, item, onRefresh }) {
 
       {/* Inline edit row */}
       {editing && status === 'idle' && (
-        <div className="mt-2 ml-14 flex items-center gap-2 flex-wrap">
+        <div className="mt-2 ml-0 sm:ml-14 flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
             <span className="text-xs text-slate-400 font-medium">New qty:</span>
             <input
@@ -160,7 +160,7 @@ function QuickStockRow({ rank, item, onRefresh }) {
 
       {/* Pushing state */}
       {status === 'pushing' && (
-        <div className="mt-2 ml-14 flex items-center gap-2 text-sm text-indigo-600">
+        <div className="mt-2 ml-0 sm:ml-14 flex items-center gap-2 text-sm text-indigo-600">
           <Loader2 size={14} className="animate-spin" />
           Pushing to Shopify…
         </div>
@@ -168,7 +168,7 @@ function QuickStockRow({ rank, item, onRefresh }) {
 
       {/* Success state */}
       {status === 'success' && (
-        <div className="mt-2 ml-14 flex items-center gap-2 text-sm text-emerald-600 font-medium">
+        <div className="mt-2 ml-0 sm:ml-14 flex items-center gap-2 text-sm text-emerald-600 font-medium">
           <CheckCircle2 size={14} />
           Updated to {newQty} units — live on Shopify ✓
         </div>
@@ -176,7 +176,7 @@ function QuickStockRow({ rank, item, onRefresh }) {
 
       {/* Failed state */}
       {status === 'failed' && (
-        <div className="mt-2 ml-14 space-y-1">
+        <div className="mt-2 ml-0 sm:ml-14 space-y-1">
           <div className="flex items-center gap-2 text-sm text-red-600">
             <XCircle size={14} /> Push failed
           </div>

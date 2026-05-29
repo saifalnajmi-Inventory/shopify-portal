@@ -39,11 +39,11 @@ export default function DashboardCard({
       </div>
 
       <div>
-        <div className={clsx('text-3xl font-bold', c.val)}>
-          {value ?? '—'}
+        <div className={clsx('text-2xl sm:text-3xl font-bold', c.val)}>
+          {value?.toLocaleString() ?? '—'}
         </div>
-        <div className="text-sm font-medium text-slate-700 mt-0.5">{title}</div>
-        {subtitle && <div className="text-xs text-slate-400 mt-0.5">{subtitle}</div>}
+        <div className="text-sm font-medium text-slate-700 mt-0.5 leading-tight">{title}</div>
+        {subtitle && <div className="text-xs text-slate-400 mt-0.5 leading-tight">{subtitle}</div>}
       </div>
 
       {trend !== undefined && (

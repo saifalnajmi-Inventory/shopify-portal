@@ -156,26 +156,27 @@ export default function RestockRulesPage() {
               <thead>
                 <tr>
                   <th>Product / Variant</th>
-                  <th>SKU</th>
+                  <th className="hidden sm:table-cell">SKU</th>
                   <th className="text-center">Threshold</th>
                   <th className="text-center">Restock To</th>
                   <th className="text-center">Auto-Push</th>
                   <th className="text-center">Enabled</th>
-                  <th>Last Triggered</th>
-                  <th>Push Status</th>
+                  <th className="hidden lg:table-cell">Last Triggered</th>
+                  <th className="hidden md:table-cell">Push Status</th>
                   <th className="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {rules.map(rule => (
                   <tr key={rule.id}>
-                    <td className="max-w-[200px]">
+                    <td className="max-w-[160px] sm:max-w-[200px]">
                       <div className="font-medium text-slate-800 truncate text-sm">{rule.productTitle}</div>
                       {rule.variantTitle && rule.variantTitle !== 'Default Title' && (
                         <div className="text-xs text-slate-400">{rule.variantTitle}</div>
                       )}
+                      {rule.sku && <div className="sm:hidden text-xs font-mono text-slate-400">{rule.sku}</div>}
                     </td>
-                    <td className="font-mono text-xs text-slate-400">{rule.sku || '—'}</td>
+                    <td className="hidden sm:table-cell font-mono text-xs text-slate-400">{rule.sku || '—'}</td>
 
                     {/* Threshold — inline editable */}
                     <td className="text-center">
@@ -214,7 +215,7 @@ export default function RestockRulesPage() {
                     </td>
 
                     {/* Last triggered */}
-                    <td className="text-xs text-slate-500">
+                    <td className="hidden lg:table-cell text-xs text-slate-500">
                       {rule.lastTriggeredAt ? (
                         <span className="flex items-center gap-1">
                           <Clock size={11} />
@@ -225,7 +226,7 @@ export default function RestockRulesPage() {
                     </td>
 
                     {/* Push status */}
-                    <td>
+                    <td className="hidden md:table-cell">
                       {rule.lastPushStatus ? (
                         <span className={clsx('flex items-center gap-1 text-xs font-medium', pushStatus[rule.lastPushStatus])}>
                           {rule.lastPushStatus === 'success' ? <CheckCircle2 size={13} /> : <XCircle size={13} />}

@@ -78,16 +78,16 @@ export default function ChangeLogPage() {
         <table className="tbl">
           <thead>
             <tr>
-              <th className="text-center w-10">#</th>
+              <th className="text-center w-8">#</th>
               <th>Date / Time</th>
               <th>Product</th>
-              <th>Field</th>
-              <th>Before</th>
+              <th className="hidden sm:table-cell">Field</th>
+              <th className="hidden sm:table-cell">Before</th>
               <th>After</th>
-              <th>Type</th>
+              <th className="hidden md:table-cell">Type</th>
               <th>Status</th>
-              <th>Error</th>
-              <th>Pushed By</th>
+              <th className="hidden lg:table-cell">Error</th>
+              <th className="hidden md:table-cell">Pushed By</th>
             </tr>
           </thead>
           <tbody>
@@ -101,9 +101,9 @@ export default function ChangeLogPage() {
                   <div className="font-medium text-slate-700">{top}</div>
                   <div className="font-medium text-slate-500">{bottom}</div>
                 </td>
-                <td className="font-medium max-w-[180px] truncate">{l.entityName}</td>
-                <td className="font-mono text-xs">{l.fieldName}</td>
-                <td>
+                <td className="font-medium max-w-[140px] sm:max-w-[200px] truncate">{l.entityName}</td>
+                <td className="hidden sm:table-cell font-mono text-xs">{l.fieldName}</td>
+                <td className="hidden sm:table-cell">
                   <span className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-600 line-through">
                     {l.beforeValue ?? '—'}
                   </span>
@@ -113,15 +113,15 @@ export default function ChangeLogPage() {
                     {l.afterValue ?? '—'}
                   </span>
                 </td>
-                <td><span className="badge badge-blue">{l.changeType}</span></td>
+                <td className="hidden md:table-cell"><span className="badge badge-blue">{l.changeType}</span></td>
                 <td>
                   {l.status === 'success'
-                    ? <span className="flex items-center gap-1 text-emerald-600 text-xs"><CheckCircle2 size={13} /> success</span>
-                    : <span className="flex items-center gap-1 text-red-600 text-xs"><XCircle size={13} /> failed</span>
+                    ? <span className="flex items-center gap-1 text-emerald-600 text-xs"><CheckCircle2 size={13} /><span className="hidden sm:inline"> success</span></span>
+                    : <span className="flex items-center gap-1 text-red-600 text-xs"><XCircle size={13} /><span className="hidden sm:inline"> failed</span></span>
                   }
                 </td>
-                <td className="text-xs text-red-500 max-w-[200px] truncate">{l.errorMessage || '—'}</td>
-                <td className="text-xs text-slate-400">{l.pushedBy || 'admin'}</td>
+                <td className="hidden lg:table-cell text-xs text-red-500 max-w-[200px] truncate">{l.errorMessage || '—'}</td>
+                <td className="hidden md:table-cell text-xs text-slate-400">{l.pushedBy || 'admin'}</td>
               </tr>
             )})}
             {!loading && !logs.length && (

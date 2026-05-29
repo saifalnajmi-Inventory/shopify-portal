@@ -156,8 +156,8 @@ export default function UsersPage() {
               <tr>
                 <th>User</th>
                 <th>Role</th>
-                <th className="text-center">Status</th>
-                <th>Last Login</th>
+                <th className="hidden sm:table-cell text-center">Status</th>
+                <th className="hidden md:table-cell">Last Login</th>
                 <th className="text-center">Actions</th>
               </tr>
             </thead>
@@ -167,28 +167,34 @@ export default function UsersPage() {
                   <td>
                     <div className="font-semibold text-slate-800 text-sm">{u.name || u.username}</div>
                     <div className="text-xs text-slate-400 font-mono">@{u.username}</div>
+                    {/* Status shown inline on mobile */}
+                    <div className="sm:hidden mt-0.5">
+                      {u.active
+                        ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 size={10} /> Active</span>
+                        : <span className="inline-flex items-center gap-1 text-xs text-slate-400"><XCircle size={10} /> Inactive</span>}
+                    </div>
                   </td>
                   <td><RoleBadge role={u.role} /></td>
-                  <td className="text-center">
+                  <td className="hidden sm:table-cell text-center">
                     {u.active
                       ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><CheckCircle2 size={12} /> Active</span>
                       : <span className="inline-flex items-center gap-1 text-xs text-slate-400 font-medium"><XCircle size={12} /> Inactive</span>
                     }
                   </td>
-                  <td className="text-xs text-slate-500">
+                  <td className="hidden md:table-cell text-xs text-slate-500">
                     {u.lastLoginAt
                       ? <span className="flex items-center gap-1"><Clock size={11} />{formatDistanceToNow(new Date(u.lastLoginAt), { addSuffix: true })}</span>
                       : <span className="text-slate-300">Never</span>}
                   </td>
                   <td className="text-center">
-                    <div className="flex items-center justify-center gap-2">
+                    <div className="flex items-center justify-center gap-1.5 flex-wrap">
                       {/* Edit */}
                       <button
                         className="btn-secondary py-1 px-2 text-xs"
                         onClick={() => setEditUser(u)}
                         title="Edit user"
                       >
-                        <KeyRound size={12} /> Edit
+                        <KeyRound size={12} /><span className="hidden sm:inline"> Edit</span>
                       </button>
                       {/* Toggle active */}
                       {u.id !== me?.id && (
@@ -202,13 +208,13 @@ export default function UsersPage() {
                           title={u.active ? 'Deactivate' : 'Activate'}
                         >
                           {u.active ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
-                          {u.active ? 'Deactivate' : 'Activate'}
+                          <span className="hidden sm:inline">{u.active ? 'Deactivate' : 'Activate'}</span>
                         </button>
                       )}
                       {/* Delete */}
                       {u.id !== me?.id && (
                         <button
-                          className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                          className="text-slate-400 hover:text-red-500 transition-colors p-1.5"
                           onClick={() => deleteUser(u)}
                           title="Delete user"
                         >
