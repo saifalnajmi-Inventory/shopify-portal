@@ -144,8 +144,8 @@ export default function OrdersPage() {
         <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
           <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-500" />
           <span>
-            Products with <strong>0 OOS</strong> stock are still active on your store — customers can try to order them again.
-            Use the <strong>Active Products</strong> card on the Dashboard to zero their stock or set them to Draft.
+            Products with <strong>0 OOS</strong> stock are still active — customers can re-order them.
+            Use <strong>Set 0</strong>, <strong>Set Draft</strong>, <strong>Update Stock</strong>, or <strong>Zero + Draft</strong> on each product below to fix them directly.
           </span>
         </div>
       )}
@@ -214,8 +214,82 @@ export default function OrdersPage() {
   )
 }
 
-// ── Cancelled orders table — product + live stock is the hero ─────────────────
+// ── Cancelled orders table — product + live stock + action buttons ────────────
 function CancelledTable({ orders, page }) {
+  // Per-line-item UI state: { [liId]: { status, mode, msg, showInput, inputVal } }
+  const [actionState,    setActionState]    = useState({})
+  // Local stock overrides after a successful push so the pill updates instantly
+  const [stockOverrides, setStockOverrides] = useState({})
+
+  function getS(id) {
+    return actionState[id] || { status: 'idle', mode: null, msg: '', showInput: false, inputVal: '' }
+  }
+  function patchS(id, patch) {
+    setActionState(prev => ({ ...prev, [id]: { ...(prev[id] || {}), ...patch } }))
+  }
+
+  async function pushAction(li, mode, inputVal) {
+    const currentStock = stockOverrides[li.id] ?? li.variant?.inventoryQuantity ?? 0
+    patchS(li.id, { status: 'pushing', mode, msg: '' })
+
+    try {
+      // ── Zero stock ──────────────────────────────────────────────────────────
+      if (mode === 'zero' || mode === 'both') {
+        const res  = await fetch('/api/quickpush', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId: li.productId, variantId: li.variantId,
+            entityName: li.title, variantName: li.variantTitle, sku: li.sku,
+            fieldName: 'inventory_quantity', beforeValue: currentStock, afterValue: 0,
+            changeType: 'inventory',
+          }),
+        })
+        const data = await res.json()
+        if (!data.ok) throw new Error(data.error || 'Stock push failed')
+        setStockOverrides(prev => ({ ...prev, [li.id]: 0 }))
+      }
+
+      // ── Set Draft ───────────────────────────────────────────────────────────
+      if (mode === 'draft' || mode === 'both') {
+        const res  = await fetch('/api/quickpush', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId: li.productId,
+            entityName: li.title,
+            fieldName: 'status', beforeValue: 'active', afterValue: 'draft',
+            changeType: 'status',
+          }),
+        })
+        const data = await res.json()
+        if (!data.ok) throw new Error(data.error || 'Draft push failed')
+      }
+
+      // ── Update to custom stock ──────────────────────────────────────────────
+      if (mode === 'stock') {
+        const newQty = parseInt(inputVal, 10)
+        if (isNaN(newQty) || newQty < 0) throw new Error('Enter a valid number')
+        const res  = await fetch('/api/quickpush', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId: li.productId, variantId: li.variantId,
+            entityName: li.title, variantName: li.variantTitle, sku: li.sku,
+            fieldName: 'inventory_quantity', beforeValue: currentStock, afterValue: newQty,
+            changeType: 'inventory',
+          }),
+        })
+        const data = await res.json()
+        if (!data.ok) throw new Error(data.error || 'Stock push failed')
+        setStockOverrides(prev => ({ ...prev, [li.id]: newQty }))
+      }
+
+      patchS(li.id, { status: 'success', showInput: false })
+      setTimeout(() => patchS(li.id, { status: 'idle', mode: null, msg: '' }), 2200)
+    } catch (e) {
+      patchS(li.id, { status: 'failed', msg: e.message })
+      setTimeout(() => patchS(li.id, { status: 'idle', mode: null, msg: '' }), 3500)
+    }
+  }
+
   return (
     <table className="tbl">
       <thead>
@@ -231,7 +305,10 @@ function CancelledTable({ orders, page }) {
         {orders.map((o, idx) => {
           const srNo    = (page - 1) * 50 + idx + 1
           const dateStr = format(new Date(o.createdAt), 'dd MMM · h:mm a')
-          const hasOOS  = o.lineItems?.some(li => li.variant?.inventoryQuantity <= 0)
+          const hasOOS  = o.lineItems?.some(li => {
+            const stock = stockOverrides[li.id] ?? li.variant?.inventoryQuantity
+            return stock != null && stock <= 0
+          })
 
           return (
             <tr key={o.id} className="align-top">
@@ -253,45 +330,139 @@ function CancelledTable({ orders, page }) {
                 )}
               </td>
 
-              {/* Products + stock — the main column */}
-              <td className="py-3 min-w-[280px]">
+              {/* Products + stock + action buttons — the main column */}
+              <td className="py-3 min-w-[320px]">
                 {o.lineItems?.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {o.lineItems.map(li => {
-                      const stock = li.variant?.inventoryQuantity
-                      const img   = li.variant?.product?.firstImageSrc
+                      const stock     = stockOverrides[li.id] ?? li.variant?.inventoryQuantity
+                      const img       = li.variant?.product?.firstImageSrc
+                      const s         = getS(li.id)
+                      const canStock  = !!li.variantId
+                      const canDraft  = !!li.productId
+                      const isPushing = s.status === 'pushing'
+
                       return (
-                        <div key={li.id} className="flex items-center gap-2.5">
-                          {/* Product thumbnail */}
-                          {img
-                            ? <img src={img} alt="" className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0" onError={e => e.target.style.display='none'} />
-                            : <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center shrink-0"><Package size={13} className="text-slate-300" /></div>
-                          }
-                          {/* Name + variant */}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-slate-800 leading-snug truncate max-w-[220px]">
-                              {li.title}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                              {li.variantTitle && li.variantTitle !== 'Default Title' && (
-                                <span className="text-[11px] text-slate-400">{li.variantTitle}</span>
-                              )}
-                              {li.sku && <span className="text-[10px] font-mono text-slate-400">SKU: {li.sku}</span>}
-                              <span className="text-[11px] text-slate-400">×{li.quantity}</span>
-                            </div>
-                          </div>
-                          {/* Live stock badge */}
-                          <div className="shrink-0">
-                            {stock != null
-                              ? <StockPill qty={stock} />
-                              : <span className="text-[10px] text-slate-300 italic">no stock data</span>
+                        <div key={li.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
+                          {/* Product info row */}
+                          <div className="flex items-center gap-2.5">
+                            {img
+                              ? <img src={img} alt="" className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0" onError={e => e.target.style.display='none'} />
+                              : <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center shrink-0"><Package size={13} className="text-slate-300" /></div>
                             }
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-slate-800 leading-snug truncate max-w-[220px]">
+                                {li.title}
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                {li.variantTitle && li.variantTitle !== 'Default Title' && (
+                                  <span className="text-[11px] text-slate-400">{li.variantTitle}</span>
+                                )}
+                                {li.sku && <span className="text-[10px] font-mono text-slate-400">SKU: {li.sku}</span>}
+                                <span className="text-[11px] text-slate-400">×{li.quantity}</span>
+                              </div>
+                            </div>
+                            <div className="shrink-0">
+                              {stock != null
+                                ? <StockPill qty={stock} />
+                                : <span className="text-[10px] text-slate-300 italic">no stock data</span>
+                              }
+                            </div>
                           </div>
+
+                          {/* ── Action buttons ────────────────────────────── */}
+                          {(canStock || canDraft) && (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+
+                              {/* 1. Set 0 */}
+                              {canStock && (
+                                <button
+                                  disabled={isPushing}
+                                  onClick={() => pushAction(li, 'zero')}
+                                  className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 disabled:opacity-40 transition-colors whitespace-nowrap"
+                                >
+                                  Set 0
+                                </button>
+                              )}
+
+                              {/* 2. Set Draft */}
+                              {canDraft && (
+                                <button
+                                  disabled={isPushing}
+                                  onClick={() => pushAction(li, 'draft')}
+                                  className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200 disabled:opacity-40 transition-colors whitespace-nowrap"
+                                >
+                                  Set Draft
+                                </button>
+                              )}
+
+                              {/* 3. Update Stock — shows inline input when active */}
+                              {canStock && (
+                                s.showInput ? (
+                                  <span className="flex items-center gap-1">
+                                    <input
+                                      type="number" min="0"
+                                      className="w-16 text-[11px] border border-blue-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                      placeholder="qty"
+                                      value={s.inputVal}
+                                      onChange={e => patchS(li.id, { inputVal: e.target.value })}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter')  pushAction(li, 'stock', s.inputVal)
+                                        if (e.key === 'Escape') patchS(li.id, { showInput: false, inputVal: '' })
+                                      }}
+                                      autoFocus
+                                    />
+                                    <button
+                                      disabled={isPushing}
+                                      onClick={() => pushAction(li, 'stock', s.inputVal)}
+                                      className="text-[11px] font-bold px-2 py-1 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-40 transition-colors"
+                                    >✓</button>
+                                    <button
+                                      onClick={() => patchS(li.id, { showInput: false, inputVal: '' })}
+                                      className="text-[11px] px-1.5 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                                    >✕</button>
+                                  </span>
+                                ) : (
+                                  <button
+                                    disabled={isPushing}
+                                    onClick={() => patchS(li.id, { showInput: true, inputVal: String(stock ?? 0) })}
+                                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 disabled:opacity-40 transition-colors whitespace-nowrap"
+                                  >
+                                    Update Stock
+                                  </button>
+                                )
+                              )}
+
+                              {/* 4. Zero + Draft */}
+                              {canStock && canDraft && (
+                                <button
+                                  disabled={isPushing}
+                                  onClick={() => pushAction(li, 'both')}
+                                  className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border bg-red-50 text-red-700 border-red-200 hover:bg-red-100 disabled:opacity-40 transition-colors whitespace-nowrap"
+                                >
+                                  Zero + Draft
+                                </button>
+                              )}
+
+                              {/* Status feedback */}
+                              {isPushing && (
+                                <span className="text-[11px] text-slate-400 italic animate-pulse ml-1">
+                                  Pushing to Shopify…
+                                </span>
+                              )}
+                              {s.status === 'success' && (
+                                <span className="text-[11px] text-emerald-600 font-bold ml-1">✓ Done!</span>
+                              )}
+                              {s.status === 'failed' && (
+                                <span className="text-[11px] text-red-500 ml-1">{s.msg || 'Failed'}</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
                     {o._count?.lineItems > o.lineItems.length && (
-                      <div className="text-[11px] text-slate-400 pl-11">
+                      <div className="text-[11px] text-slate-400 pl-2">
                         +{o._count.lineItems - o.lineItems.length} more item{o._count.lineItems - o.lineItems.length > 1 ? 's' : ''}
                       </div>
                     )}

@@ -67,6 +67,7 @@ export default withAuth(async function handler(req, res) {
             price:       true,
             sku:         true,
             variantId:   true,
+            productId:   true,
             // Pull current stock + product image so the cancelled orders page
             // can show "this is why the order was cancelled"
             variant: {
