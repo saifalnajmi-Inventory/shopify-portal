@@ -14,7 +14,7 @@ import {
   Cable, CheckCircle2, Clock, AlertCircle,
   RefreshCw, Wifi, WifiOff, Package, Search, X,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Minus,
-  ShoppingBag, Server, Link2, CheckSquare,
+  ShoppingBag, Server, Link2, CheckSquare, Zap,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ function LinkModal({ row, onClose, onLinked, autoActivate }) {
 }
 
 // ── Row component ─────────────────────────────────────────────────────────────
-function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelect, onStatusChange, onLinkClick, updating }) {
+function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelect, onStatusChange, onLinkClick, onActivate, updating }) {
   const pos   = row.posProduct
   const match = row.variant
 
@@ -383,6 +383,14 @@ function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelec
               Reject
             </button>
           )}
+          {/* Activate — confirmed rows where Shopify product is still draft */}
+          {row.status === 'confirmed' && row.shopifyStatus === 'draft' && (
+            <button disabled={updating} onClick={() => onActivate(row.id)}
+              title="Set Shopify product to Active"
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 disabled:opacity-40 transition-colors flex items-center gap-1">
+              <Zap size={9} /> Activate
+            </button>
+          )}
           {/* Reset */}
           {(row.status === 'confirmed' || row.status === 'rejected') && (
             <button disabled={updating} onClick={() => onStatusChange(row.id, 'pending')}
@@ -417,8 +425,9 @@ export default function PosSyncPage() {
   const [linkRow,       setLinkRow]       = useState(null)
   const [stockFilter,   setStockFilter]   = useState('all')
   const [autoActivate,  setAutoActivate]  = useState(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem('pos_auto_activate') === '1'
+    if (typeof window === 'undefined') return true
+    const stored = localStorage.getItem('pos_auto_activate')
+    return stored === null ? true : stored === '1'  // default ON
   })
   const searchTimer = useRef(null)
 
@@ -502,6 +511,21 @@ export default function PosSyncPage() {
       await Promise.all([loadTable(), loadStats()])
     } catch {}
     setBulkUpdating(false)
+  }
+
+  // Activate a draft Shopify product (for already-confirmed rows)
+  async function handleActivate(matchId) {
+    setUpdating(true)
+    try {
+      const r = await fetch('/api/pos/activate-product', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ matchId }),
+      })
+      const d = await r.json()
+      if (d.ok) await loadTable()
+    } catch { /* ignore */ }
+    setUpdating(false)
   }
 
   // Update row status
@@ -733,6 +757,7 @@ export default function PosSyncPage() {
                   onToggleSelect={toggleSelect}
                   onStatusChange={handleStatusChange}
                   onLinkClick={setLinkRow}
+                  onActivate={handleActivate}
                   updating={updating}
                 />
               ))}
