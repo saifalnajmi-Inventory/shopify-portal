@@ -6,7 +6,7 @@ import {
   RefreshCw, Store, Menu, X, Bell, Zap, Settings,
   CheckCircle2, Clock, AlertCircle, Wifi, Users,
   LogOut, ShieldCheck, Shield, User, Eye, KeyRound, Crown,
-  ShoppingBag,
+  ShoppingBag, Cable,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -22,6 +22,7 @@ const NAV_ALL = [
   { href: '/change-log',    label: 'Change Log',     icon: History          },
   { href: '/notifications', label: 'Notifications',  icon: Bell, badgeKey: 'unread' },
   { href: '/restock-rules', label: 'Auto-Restock',   icon: Zap              },
+  { href: '/pos-sync',      label: 'POS Sync',       icon: Cable, superAdminOnly: true },
   { href: '/settings',      label: 'Settings',       icon: Settings         },
   { href: '/users',         label: 'Users',          icon: Users, adminOnly: true },
 ]
@@ -52,9 +53,14 @@ export default function Layout({ children }) {
   const [showChangePw,   setShowChangePw]   = useState(false)
   const pollRef = useRef(null)
 
-  const isAdminOrCA = user?.role === 'super_admin' || user?.role === 'client_admin'
-  const canSync     = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'operator' || user?.role === 'owner'
-  const NAV         = NAV_ALL.filter(n => !n.adminOnly || isAdminOrCA)
+  const isAdminOrCA   = user?.role === 'super_admin' || user?.role === 'client_admin'
+  const isSuperAdmin  = user?.role === 'super_admin'
+  const canSync       = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'operator' || user?.role === 'owner'
+  const NAV           = NAV_ALL.filter(n => {
+    if (n.superAdminOnly) return isSuperAdmin
+    if (n.adminOnly)      return isAdminOrCA
+    return true
+  })
 
   // ── On mount: autosync + unread count (only when authenticated) ──────────────
   useEffect(() => {
