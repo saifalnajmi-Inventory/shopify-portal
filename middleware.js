@@ -16,6 +16,7 @@ import { NextResponse } from 'next/server'
 const PUBLIC_PREFIXES = [
   '/login',
   '/api/auth/',
+  '/api/pos/sync',   // POS agent uses x-sync-key header auth, no session cookie
   '/_next/',
   '/favicon',
 ]
