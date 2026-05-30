@@ -71,6 +71,7 @@ const TABS = [
 export default function OrdersPage() {
   const { user }             = useAuth()
   const isSuperAdmin         = user?.role === 'super_admin'
+  const canSeeCancelledTotal = isSuperAdmin || user?.role === 'owner'
 
   const [tab,                setTab]                = useState('all')
   const [orders,             setOrders]             = useState([])
@@ -168,8 +169,8 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* ── Cancelled total value summary — super admin only ─────────────── */}
-      {tab === 'cancelled' && isSuperAdmin && (
+      {/* ── Cancelled total value summary — super admin + owner ──────────── */}
+      {tab === 'cancelled' && canSeeCancelledTotal && (
         <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl bg-slate-800 text-white">
           <div className="flex items-center gap-2.5">
             <XCircle size={18} className="text-red-400 shrink-0" />
