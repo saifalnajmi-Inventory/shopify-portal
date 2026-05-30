@@ -14,7 +14,7 @@ import {
   Cable, CheckCircle2, Clock, AlertCircle,
   RefreshCw, Wifi, WifiOff, Package, Search, X,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Minus,
-  ShoppingBag, Server, Link2,
+  ShoppingBag, Server, Link2, CheckSquare,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -229,15 +229,25 @@ function LinkModal({ row, onClose, onLinked }) {
 }
 
 // ── Row component ─────────────────────────────────────────────────────────────
-function ComparisonRow({ row, srNo, showCostAndMargin, onStatusChange, onLinkClick, updating }) {
+function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelect, onStatusChange, onLinkClick, updating }) {
   const pos   = row.posProduct
   const match = row.variant
 
   return (
-    <tr className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors group">
+    <tr className={`border-b border-slate-50 transition-colors group ${isSelected ? 'bg-indigo-50/60' : 'hover:bg-slate-50/60'}`}>
+
+      {/* Checkbox */}
+      <td className="px-2 py-3 text-center">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect(row.id)}
+          className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 cursor-pointer"
+        />
+      </td>
 
       {/* Sr# */}
-      <td className="px-3 py-3 text-center text-[11px] font-semibold text-slate-400">{srNo}</td>
+      <td className="px-2 py-3 text-center text-[11px] font-semibold text-slate-400">{srNo}</td>
 
       {/* POS product */}
       <td className="px-4 py-3">
@@ -345,41 +355,38 @@ function ComparisonRow({ row, srNo, showCostAndMargin, onStatusChange, onLinkCli
       {/* Actions */}
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          {/* Confirm — only for auto-matched pending rows */}
-          {row.status !== 'confirmed' && row.variant && (
-            <button
-              disabled={updating}
-              onClick={() => onStatusChange(row.id, 'confirmed')}
-              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors"
-            >
+          {/* Confirm — pending matched rows */}
+          {row.status === 'pending' && row.variant && (
+            <button disabled={updating} onClick={() => onStatusChange(row.id, 'confirmed')}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors">
               Confirm
             </button>
           )}
-          {/* Link — for unmatched rows with no Shopify variant */}
+          {/* Link — unmatched rows */}
           {row.status === 'unmatched' && !row.variant && (
-            <button
-              disabled={updating}
-              onClick={() => onLinkClick(row)}
-              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors flex items-center gap-1"
-            >
+            <button disabled={updating} onClick={() => onLinkClick(row)}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors flex items-center gap-1">
               <Link2 size={10} /> Link
             </button>
           )}
-          {row.status !== 'rejected' && row.status !== 'unmatched' && (
-            <button
-              disabled={updating}
-              onClick={() => onStatusChange(row.id, 'rejected')}
-              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40 transition-colors"
-            >
+          {/* Re-link — pending matched rows (wrong match) */}
+          {row.status === 'pending' && row.variant && (
+            <button disabled={updating} onClick={() => onLinkClick(row)}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-40 transition-colors flex items-center gap-1">
+              <Link2 size={10} /> Re-link
+            </button>
+          )}
+          {/* Reject */}
+          {(row.status === 'pending') && (
+            <button disabled={updating} onClick={() => onStatusChange(row.id, 'rejected')}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40 transition-colors">
               Reject
             </button>
           )}
+          {/* Reset */}
           {(row.status === 'confirmed' || row.status === 'rejected') && (
-            <button
-              disabled={updating}
-              onClick={() => onStatusChange(row.id, 'pending')}
-              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100 disabled:opacity-40 transition-colors"
-            >
+            <button disabled={updating} onClick={() => onStatusChange(row.id, 'pending')}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100 disabled:opacity-40 transition-colors">
               Reset
             </button>
           )}
@@ -404,9 +411,11 @@ export default function PosSyncPage() {
   const [page,        setPage]        = useState(1)
   const [search,      setSearch]      = useState('')
   const [debouncedQ,  setDebouncedQ]  = useState('')
-  const [updating,    setUpdating]    = useState(false)
-  const [linkRow,     setLinkRow]     = useState(null)  // row for the manual-link modal
-  const [stockFilter, setStockFilter] = useState('all') // all | in | out
+  const [updating,      setUpdating]      = useState(false)
+  const [bulkUpdating,  setBulkUpdating]  = useState(false)
+  const [selectedIds,   setSelectedIds]   = useState(new Set())
+  const [linkRow,       setLinkRow]       = useState(null)
+  const [stockFilter,   setStockFilter]   = useState('all')
   const searchTimer = useRef(null)
 
   // Guard — super_admin + owner can access POS Sync
@@ -456,16 +465,39 @@ export default function PosSyncPage() {
   useEffect(() => { loadStats() }, [loadStats])
   useEffect(() => { loadTable() }, [loadTable])
 
-  // Switch tab
-  function switchTab(key) {
-    setActiveTab(key)
-    setPage(1)
+  function switchTab(key) { setActiveTab(key); setPage(1); setSelectedIds(new Set()) }
+  function switchStock(key) { setStockFilter(key); setPage(1); setSelectedIds(new Set()) }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
   }
 
-  // Switch stock filter
-  function switchStock(key) {
-    setStockFilter(key)
-    setPage(1)
+  function toggleSelectAll() {
+    if (selectedIds.size === rows.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(rows.map(r => r.id)))
+    }
+  }
+
+  async function handleBulkAction(status) {
+    const ids = [...selectedIds]
+    if (!ids.length) return
+    setBulkUpdating(true)
+    try {
+      await fetch('/api/pos/bulk-action', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ matchIds: ids, status }),
+      })
+      setSelectedIds(new Set())
+      await Promise.all([loadTable(), loadStats()])
+    } catch {}
+    setBulkUpdating(false)
   }
 
   // Update row status
@@ -488,7 +520,7 @@ export default function PosSyncPage() {
   // Super admin sees cost price + margin; owner sees everything else
   const showCostAndMargin = user.role === 'super_admin'
   // Total visible columns for colspan / skeleton
-  const colCount = showCostAndMargin ? 11 : 9
+  const colCount = showCostAndMargin ? 12 : 10
 
   const agentConnected = stats?.lastSyncedAt
   const syncAgo        = ago(stats?.lastSyncedAt)
@@ -625,7 +657,14 @@ export default function PosSyncPage() {
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-center px-3 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-wide w-10">Sr#</th>
+                <th className="px-2 py-3 w-8 text-center">
+                  <input type="checkbox"
+                    checked={rows.length > 0 && selectedIds.size === rows.length}
+                    onChange={toggleSelectAll}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 cursor-pointer"
+                  />
+                </th>
+                <th className="text-center px-2 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-wide w-10">Sr#</th>
                 <th className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Product</th>
                 <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Stock</th>
                 {showCostAndMargin && <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Price</th>}
@@ -664,6 +703,8 @@ export default function PosSyncPage() {
                   row={row}
                   srNo={(page - 1) * 50 + idx + 1}
                   showCostAndMargin={showCostAndMargin}
+                  isSelected={selectedIds.has(row.id)}
+                  onToggleSelect={toggleSelect}
                   onStatusChange={handleStatusChange}
                   onLinkClick={setLinkRow}
                   updating={updating}
@@ -696,6 +737,35 @@ export default function PosSyncPage() {
           </div>
         )}
       </div>
+
+      {/* Floating bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl">
+          <CheckSquare size={15} className="text-indigo-400" />
+          <span className="text-sm font-semibold">{selectedIds.size} selected</span>
+          <div className="w-px h-4 bg-slate-600" />
+          <button
+            disabled={bulkUpdating}
+            onClick={() => handleBulkAction('confirmed')}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 transition-colors"
+          >
+            {bulkUpdating ? 'Confirming…' : `Confirm ${selectedIds.size}`}
+          </button>
+          <button
+            disabled={bulkUpdating}
+            onClick={() => handleBulkAction('rejected')}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 disabled:opacity-40 transition-colors"
+          >
+            Reject {selectedIds.size}
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-slate-400 hover:text-white transition-colors p-1"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Manual Link Modal */}
       {linkRow && (
