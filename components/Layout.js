@@ -22,7 +22,7 @@ const NAV_ALL = [
   { href: '/change-log',    label: 'Change Log',     icon: History          },
   { href: '/notifications', label: 'Notifications',  icon: Bell, badgeKey: 'unread' },
   { href: '/restock-rules', label: 'Auto-Restock',   icon: Zap              },
-  { href: '/pos-sync',      label: 'POS Sync',       icon: Cable, superAdminOnly: true },
+  { href: '/pos-sync',      label: 'POS Sync',       icon: Cable, posSyncOnly: true },
   { href: '/settings',      label: 'Settings',       icon: Settings         },
   { href: '/users',         label: 'Users',          icon: Users, adminOnly: true },
 ]
@@ -56,8 +56,9 @@ export default function Layout({ children }) {
   const isAdminOrCA   = user?.role === 'super_admin' || user?.role === 'client_admin'
   const isSuperAdmin  = user?.role === 'super_admin'
   const canSync       = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'operator' || user?.role === 'owner'
+  const isPosSyncUser = isSuperAdmin || user?.role === 'owner'
   const NAV           = NAV_ALL.filter(n => {
-    if (n.superAdminOnly) return isSuperAdmin
+    if (n.posSyncOnly)    return isPosSyncUser
     if (n.adminOnly)      return isAdminOrCA
     return true
   })

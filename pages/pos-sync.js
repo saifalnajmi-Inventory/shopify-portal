@@ -112,12 +112,15 @@ function MarginCell({ cost, shopifyPrice }) {
 }
 
 // ── Row component ─────────────────────────────────────────────────────────────
-function ComparisonRow({ row, onStatusChange, updating }) {
+function ComparisonRow({ row, srNo, showCostAndMargin, onStatusChange, updating }) {
   const pos   = row.posProduct
   const match = row.variant
 
   return (
     <tr className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors group">
+
+      {/* Sr# */}
+      <td className="px-3 py-3 text-center text-[11px] font-semibold text-slate-400">{srNo}</td>
 
       {/* POS product */}
       <td className="px-4 py-3">
@@ -143,10 +146,12 @@ function ComparisonRow({ row, onStatusChange, updating }) {
         <div className="text-[10px] text-slate-400">{fmt(pos.stockMain)} + {fmt(pos.stockStore)}</div>
       </td>
 
-      {/* Cost price (shown as POS Price) */}
-      <td className="px-4 py-3 text-center">
-        <span className="text-sm font-semibold text-slate-700">{fmtPrice(pos.costPrice)}</span>
-      </td>
+      {/* Cost price (shown as POS Price) — super_admin only */}
+      {showCostAndMargin && (
+        <td className="px-4 py-3 text-center">
+          <span className="text-sm font-semibold text-slate-700">{fmtPrice(pos.costPrice)}</span>
+        </td>
+      )}
 
       {/* Stock diff */}
       <td className="px-4 py-3 text-center">
@@ -203,10 +208,12 @@ function ComparisonRow({ row, onStatusChange, updating }) {
         }
       </td>
 
-      {/* Margin */}
-      <td className="px-4 py-3 text-center">
-        <MarginCell cost={pos.costPrice} shopifyPrice={row.shopifyPrice} />
-      </td>
+      {/* Margin — super_admin only */}
+      {showCostAndMargin && (
+        <td className="px-4 py-3 text-center">
+          <MarginCell cost={pos.costPrice} shopifyPrice={row.shopifyPrice} />
+        </td>
+      )}
 
       {/* Match type + status */}
       <td className="px-4 py-3">
@@ -272,9 +279,9 @@ export default function PosSyncPage() {
   const [updating,    setUpdating]    = useState(false)
   const searchTimer = useRef(null)
 
-  // Guard
+  // Guard — super_admin + owner can access POS Sync
   useEffect(() => {
-    if (!authLoading && user && user.role !== 'super_admin') router.replace('/')
+    if (!authLoading && user && user.role !== 'super_admin' && user.role !== 'owner') router.replace('/')
   }, [user, authLoading, router])
 
   // Debounce search
@@ -339,7 +346,12 @@ export default function PosSyncPage() {
   }
 
   if (authLoading || !user) return null
-  if (user.role !== 'super_admin') return null
+  if (user.role !== 'super_admin' && user.role !== 'owner') return null
+
+  // Super admin sees cost price + margin; owner sees everything else
+  const showCostAndMargin = user.role === 'super_admin'
+  // Total visible columns for colspan / skeleton
+  const colCount = showCostAndMargin ? 11 : 9
 
   const agentConnected = stats?.lastSyncedAt
   const syncAgo        = ago(stats?.lastSyncedAt)
@@ -356,7 +368,7 @@ export default function PosSyncPage() {
             <h1 className="text-2xl font-bold text-slate-800">POS Sync</h1>
           </div>
           <p className="text-sm text-slate-400">
-            PROACT GEN ↔ Shopify · auto-synced every 30 min · super admin only
+            PROACT GEN ↔ Shopify · auto-synced every 30 min
           </p>
         </div>
 
@@ -452,14 +464,15 @@ export default function PosSyncPage() {
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
+                <th className="text-center px-3 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-wide w-10">Sr#</th>
                 <th className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Product</th>
                 <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Stock</th>
-                <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Price</th>
+                {showCostAndMargin && <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Price</th>}
                 <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Diff</th>
                 <th className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Shopify Product</th>
                 <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Shopify Stock</th>
                 <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Shopify Price</th>
-                <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Margin</th>
+                {showCostAndMargin && <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Margin</th>}
                 <th className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Match</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -468,7 +481,7 @@ export default function PosSyncPage() {
               {tableLoading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="border-b border-slate-50">
-                    {Array.from({ length: 9 }).map((_, j) => (
+                    {Array.from({ length: colCount }).map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-slate-100 rounded animate-pulse" />
                       </td>
@@ -477,17 +490,19 @@ export default function PosSyncPage() {
                 ))
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-16 text-slate-400">
+                  <td colSpan={colCount} className="text-center py-16 text-slate-400">
                     <Package size={32} className="mx-auto mb-3 opacity-30" />
                     <p className="text-sm font-medium">
                       {search ? `No results for "${search}"` : 'No products yet — run the agent on Toshiba to populate this table'}
                     </p>
                   </td>
                 </tr>
-              ) : rows.map(row => (
+              ) : rows.map((row, idx) => (
                 <ComparisonRow
                   key={row.id}
                   row={row}
+                  srNo={(page - 1) * 50 + idx + 1}
+                  showCostAndMargin={showCostAndMargin}
                   onStatusChange={handleStatusChange}
                   updating={updating}
                 />
