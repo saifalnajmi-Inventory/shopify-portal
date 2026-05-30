@@ -122,11 +122,11 @@ function ComparisonRow({ row, onStatusChange, updating }) {
       {/* POS product */}
       <td className="px-4 py-3">
         <div className="flex items-start gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0 mt-0.5">
-            <Server size={12} className="text-orange-400" />
+          <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0 mt-0.5">
+            <Server size={13} className="text-orange-400" />
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-800 truncate max-w-[180px]" title={pos.name}>
+            <div className="text-sm font-semibold text-slate-800 leading-snug" title={pos.name}>
               {pos.name || '—'}
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
@@ -161,15 +161,15 @@ function ComparisonRow({ row, onStatusChange, updating }) {
               <img
                 src={match.product.firstImageSrc}
                 alt=""
-                className="w-7 h-7 rounded-lg object-cover shrink-0 border border-slate-200 mt-0.5"
+                className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-200"
               />
             ) : (
-              <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
-                <ShoppingBag size={12} className="text-emerald-500" />
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                <ShoppingBag size={14} className="text-emerald-500" />
               </div>
             )}
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-slate-800 truncate max-w-[180px]" title={match.product?.title}>
+              <div className="text-sm font-semibold text-slate-800 leading-snug" title={match.product?.title}>
                 {match.product?.title || '—'}
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">
