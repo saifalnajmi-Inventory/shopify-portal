@@ -99,28 +99,16 @@ function StatusBadge({ status }) {
 }
 
 // ── Margin cell ───────────────────────────────────────────────────────────────
-function MarginCell({ cost, posPrice, shopifyPrice }) {
-  function pct(sell, c) {
-    if (!sell || !c || sell <= 0) return null
-    return ((sell - c) / sell * 100).toFixed(1)
-  }
-  const posM  = pct(posPrice,     cost)
-  const shopM = pct(shopifyPrice, cost)
+function MarginCell({ cost, shopifyPrice }) {
+  if (!shopifyPrice || !cost || shopifyPrice <= 0 || cost <= 0)
+    return <span className="text-slate-300 text-xs">—</span>
 
-  if (posM == null && shopM == null) return <span className="text-slate-300 text-xs">—</span>
+  const pct = ((shopifyPrice - cost) / shopifyPrice * 100).toFixed(1)
+  const color = parseFloat(pct) >= 30 ? 'text-emerald-600'
+              : parseFloat(pct) >= 15 ? 'text-amber-600'
+              : 'text-rose-500'
 
-  function color(v) {
-    if (v == null) return ''
-    const n = parseFloat(v)
-    return n >= 30 ? 'text-emerald-600' : n >= 15 ? 'text-amber-600' : 'text-rose-500'
-  }
-
-  return (
-    <div className="flex flex-col gap-0.5 items-center">
-      {posM  != null && <span className={`text-[11px] font-bold ${color(posM)}`}  title="POS margin">P {posM}%</span>}
-      {shopM != null && <span className={`text-[11px] font-bold ${color(shopM)}`} title="Shopify margin">S {shopM}%</span>}
-    </div>
-  )
+  return <span className={`text-[11px] font-bold ${color}`}>{pct}%</span>
 }
 
 // ── Row component ─────────────────────────────────────────────────────────────
@@ -155,14 +143,9 @@ function ComparisonRow({ row, onStatusChange, updating }) {
         <div className="text-[10px] text-slate-400">{fmt(pos.stockMain)} + {fmt(pos.stockStore)}</div>
       </td>
 
-      {/* POS price */}
+      {/* Cost price (shown as POS Price) */}
       <td className="px-4 py-3 text-center">
-        <span className="text-sm font-semibold text-slate-700">{fmtPrice(pos.price)}</span>
-      </td>
-
-      {/* Cost price */}
-      <td className="px-4 py-3 text-center">
-        <span className="text-sm text-slate-500">{fmtPrice(pos.costPrice)}</span>
+        <span className="text-sm font-semibold text-slate-700">{fmtPrice(pos.costPrice)}</span>
       </td>
 
       {/* Stock diff */}
@@ -222,7 +205,7 @@ function ComparisonRow({ row, onStatusChange, updating }) {
 
       {/* Margin */}
       <td className="px-4 py-3 text-center">
-        <MarginCell cost={pos.costPrice} posPrice={pos.price} shopifyPrice={row.shopifyPrice} />
+        <MarginCell cost={pos.costPrice} shopifyPrice={row.shopifyPrice} />
       </td>
 
       {/* Match type + status */}
@@ -472,7 +455,6 @@ export default function PosSyncPage() {
                 <th className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Product</th>
                 <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Stock</th>
                 <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Price</th>
-                <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Cost</th>
                 <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Diff</th>
                 <th className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Shopify Product</th>
                 <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Shopify Stock</th>
