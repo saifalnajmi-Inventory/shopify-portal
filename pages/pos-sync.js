@@ -14,7 +14,7 @@ import {
   Cable, CheckCircle2, Clock, AlertCircle,
   RefreshCw, Wifi, WifiOff, Package, Search, X,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Minus,
-  ShoppingBag, Server,
+  ShoppingBag, Server, Link2,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -111,8 +111,125 @@ function MarginCell({ cost, shopifyPrice }) {
   return <span className={`text-[11px] font-bold ${color}`}>{pct}%</span>
 }
 
+// ── Manual Link Modal ─────────────────────────────────────────────────────────
+function LinkModal({ row, onClose, onLinked }) {
+  const [q,        setQ]        = useState('')
+  const [results,  setResults]  = useState([])
+  const [loading,  setLoading]  = useState(false)
+  const [linking,  setLinking]  = useState(null)  // variantId being linked
+  const timer = useRef(null)
+
+  useEffect(() => {
+    clearTimeout(timer.current)
+    if (!q.trim() || q.trim().length < 2) { setResults([]); return }
+    setLoading(true)
+    timer.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/pos/search-variants?q=${encodeURIComponent(q.trim())}`)
+        const d = await r.json()
+        setResults(d.variants || [])
+      } catch {}
+      setLoading(false)
+    }, 350)
+    return () => clearTimeout(timer.current)
+  }, [q])
+
+  async function handleLink(shopifyVariantId) {
+    setLinking(shopifyVariantId)
+    try {
+      const r = await fetch('/api/pos/manual-link', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ posMatchId: row.id, shopifyVariantId }),
+      })
+      const d = await r.json()
+      if (d.ok) { onLinked(); onClose() }
+      else alert(d.error || 'Link failed')
+    } catch (e) { alert(e.message) }
+    setLinking(null)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="font-bold text-slate-800 text-base flex items-center gap-2">
+              <Link2 size={16} className="text-indigo-500" /> Link to Shopify Product
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              POS: <span className="font-semibold text-slate-600">{row.posProduct?.name}</span>
+              <span className="ml-2 font-mono text-slate-400">{row.posProduct?.barcode}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            autoFocus
+            type="text"
+            placeholder="Search Shopify by name, SKU or barcode…"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            className="pl-8 pr-4 py-2 text-sm border border-slate-200 rounded-xl w-full focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+        </div>
+
+        {/* Results */}
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {loading ? (
+            <p className="text-xs text-slate-400 text-center py-4">Searching…</p>
+          ) : results.length === 0 && q.length >= 2 ? (
+            <p className="text-xs text-slate-400 text-center py-4">No results for "{q}"</p>
+          ) : results.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-4">Type at least 2 characters to search</p>
+          ) : results.map(v => (
+            <div key={v.id} className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors group">
+              {v.product?.firstImageSrc ? (
+                <img src={v.product.firstImageSrc} alt="" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                  <ShoppingBag size={14} className="text-emerald-400" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-slate-800 leading-snug truncate">{v.product?.title}</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {v.sku     && <span className="text-[10px] text-slate-400 font-mono">SKU: {v.sku}</span>}
+                  {v.barcode && <span className="text-[10px] text-slate-400 font-mono">·  {v.barcode}</span>}
+                  <span className={`text-[10px] font-bold ${v.product?.status === 'active' ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    {v.product?.status}
+                  </span>
+                </div>
+              </div>
+              <button
+                disabled={!!linking}
+                onClick={() => handleLink(v.id)}
+                className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {linking === v.id ? '…' : 'Link & Confirm'}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-[10px] text-slate-400">
+          Confirming will write the POS barcode to Shopify and set Shopify stock = POS stock.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ── Row component ─────────────────────────────────────────────────────────────
-function ComparisonRow({ row, srNo, showCostAndMargin, onStatusChange, updating }) {
+function ComparisonRow({ row, srNo, showCostAndMargin, onStatusChange, onLinkClick, updating }) {
   const pos   = row.posProduct
   const match = row.variant
 
@@ -228,6 +345,7 @@ function ComparisonRow({ row, srNo, showCostAndMargin, onStatusChange, updating 
       {/* Actions */}
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Confirm — only for auto-matched pending rows */}
           {row.status !== 'confirmed' && row.variant && (
             <button
               disabled={updating}
@@ -237,7 +355,17 @@ function ComparisonRow({ row, srNo, showCostAndMargin, onStatusChange, updating 
               Confirm
             </button>
           )}
-          {row.status !== 'rejected' && (
+          {/* Link — for unmatched rows with no Shopify variant */}
+          {row.status === 'unmatched' && !row.variant && (
+            <button
+              disabled={updating}
+              onClick={() => onLinkClick(row)}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors flex items-center gap-1"
+            >
+              <Link2 size={10} /> Link
+            </button>
+          )}
+          {row.status !== 'rejected' && row.status !== 'unmatched' && (
             <button
               disabled={updating}
               onClick={() => onStatusChange(row.id, 'rejected')}
@@ -277,6 +405,7 @@ export default function PosSyncPage() {
   const [search,      setSearch]      = useState('')
   const [debouncedQ,  setDebouncedQ]  = useState('')
   const [updating,    setUpdating]    = useState(false)
+  const [linkRow,     setLinkRow]     = useState(null)  // row for the manual-link modal
   const searchTimer = useRef(null)
 
   // Guard — super_admin + owner can access POS Sync
@@ -504,6 +633,7 @@ export default function PosSyncPage() {
                   srNo={(page - 1) * 50 + idx + 1}
                   showCostAndMargin={showCostAndMargin}
                   onStatusChange={handleStatusChange}
+                  onLinkClick={setLinkRow}
                   updating={updating}
                 />
               ))}
@@ -535,6 +665,14 @@ export default function PosSyncPage() {
         )}
       </div>
 
+      {/* Manual Link Modal */}
+      {linkRow && (
+        <LinkModal
+          row={linkRow}
+          onClose={() => setLinkRow(null)}
+          onLinked={() => { loadTable(); loadStats() }}
+        />
+      )}
     </>
   )
 }
