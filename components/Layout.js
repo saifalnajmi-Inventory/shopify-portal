@@ -99,7 +99,7 @@ export default function Layout({ children }) {
         if (!data.syncRunning && data.status === 'fresh') {
           clearInterval(pollRef.current)
           pollRef.current = null
-          router.replace(router.asPath)
+          window.dispatchEvent(new CustomEvent('shopify-sync-done'))
           toast.success(`Auto-sync complete — ${data.productCount?.toLocaleString()} products loaded`, { duration: 4000 })
         }
       } catch { /* silent */ }
@@ -121,7 +121,7 @@ export default function Layout({ children }) {
         } else {
           toast.success(`Synced ${data.products?.toLocaleString()} products · ${data.orders?.toLocaleString()} orders`, { id: tid })
         }
-        router.replace(router.asPath)
+        window.dispatchEvent(new CustomEvent('shopify-sync-done'))
         await checkAutoSync()
       } else {
         toast.error(data.error || 'Sync failed', { id: tid })

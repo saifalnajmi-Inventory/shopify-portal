@@ -110,6 +110,7 @@ async function handler(req, res) {
       orderBy: { startedAt: 'desc' },
     })
 
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
     return res.status(200).json({
       lastSync: lastSync?.completedAt || null,
       cards: {

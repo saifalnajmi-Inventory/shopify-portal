@@ -50,7 +50,7 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const res  = await fetch('/api/dashboard')
+      const res  = await fetch('/api/dashboard', { cache: 'no-store' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `API error ${res.status}`)
       setData(json)
@@ -61,7 +61,12 @@ export default function Dashboard() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    // Auto-refresh when a Shopify sync completes (triggered by Layout)
+    window.addEventListener('shopify-sync-done', load)
+    return () => window.removeEventListener('shopify-sync-done', load)
+  }, [load])
 
   function openCard(key) { setActiveCard(key) }
   function closeCard()   { setActiveCard(null) }
