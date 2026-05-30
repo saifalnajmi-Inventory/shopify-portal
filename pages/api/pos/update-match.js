@@ -4,7 +4,7 @@
  * Auth: super_admin only.
  */
 
-import { db }          from '../../../lib/db'
+import db from '../../../lib/db'
 import { requireAuth } from '../../../lib/auth'
 
 const ALLOWED_STATUSES = ['confirmed', 'rejected', 'pending']
