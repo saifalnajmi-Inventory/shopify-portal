@@ -288,19 +288,20 @@ model AuditLog {
 // ─── POS Sync (PROACT GEN Integration) ────────────────────────────────────────
 
 model PosProduct {
-  id           String    @id @default(cuid())
-  barcode      String    @unique           // PROACT barcode = primary match key
-  name         String
-  price        Float     @default(0)
-  stockMain    Int       @default(0)       // OUHAD SHOP branch stock
-  stockStore   Int       @default(0)       // STORE branch stock
-  category     String?
-  unit         String?
-  shopifyId    String?                     // matched Shopify product ID (null = not on Shopify)
+  id               String    @id @default(cuid())
+  barcode          String    @unique           // PROACT Code = primary match key
+  name             String
+  price            Float     @default(0)
+  stockMain        Int       @default(0)       // OUHAD SHOP branch stock
+  stockStore       Int       @default(0)       // STORE branch stock
+  category         String?
+  unit             String?
+  sku              String?                     // PROACT Alt_Code_2 — used for Shopify variant SKU match
+  shopifyId        String?                     // matched Shopify product ID (null = not on Shopify)
   shopifyVariantId String?
-  lastSyncedAt DateTime  @default(now())
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  lastSyncedAt     DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model PosSync {

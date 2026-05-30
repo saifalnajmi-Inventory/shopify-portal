@@ -38,6 +38,7 @@ export default async function handler(req, res) {
             stockStore:    p.stockStore   || 0,
             category:      p.category     || null,
             unit:          p.unit         || null,
+            sku:           p.sku          || null,
             lastSyncedAt:  new Date(),
           },
           create: {
@@ -48,6 +49,7 @@ export default async function handler(req, res) {
             stockStore:    p.stockStore   || 0,
             category:      p.category     || null,
             unit:          p.unit         || null,
+            sku:           p.sku          || null,
             lastSyncedAt:  new Date(),
           },
         })
