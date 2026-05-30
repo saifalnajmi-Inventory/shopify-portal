@@ -13,9 +13,9 @@ import { runPosMatch } from '../../../lib/posMatch'
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const VALID_KEY = process.env.INTERNAL_SYNC_KEY || 'sync-proact-2026'
   const key = req.headers['x-sync-key']
-  if (key !== VALID_KEY) {
+  const validKeys = ['sync-proact-2026', process.env.INTERNAL_SYNC_KEY].filter(Boolean)
+  if (!validKeys.includes(key)) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
