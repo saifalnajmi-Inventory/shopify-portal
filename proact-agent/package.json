@@ -1,0 +1,14 @@
+{
+  "name": "proact-sync-agent",
+  "version": "1.0.0",
+  "description": "PROACT GEN → Portal sync agent",
+  "main": "agent.js",
+  "scripts": {
+    "discover": "node discover.js",
+    "start": "node agent.js"
+  },
+  "dependencies": {
+    "mssql": "^10.0.1",
+    "node-fetch": "^2.7.0"
+  }
+}

@@ -284,3 +284,31 @@ model AuditLog {
   ipAddress String?
   createdAt DateTime @default(now())
 }
+
+// ─── POS Sync (PROACT GEN Integration) ────────────────────────────────────────
+
+model PosProduct {
+  id           String    @id @default(cuid())
+  barcode      String    @unique           // PROACT barcode = primary match key
+  name         String
+  price        Float     @default(0)
+  stockMain    Int       @default(0)       // OUHAD SHOP branch stock
+  stockStore   Int       @default(0)       // STORE branch stock
+  category     String?
+  unit         String?
+  shopifyId    String?                     // matched Shopify product ID (null = not on Shopify)
+  shopifyVariantId String?
+  lastSyncedAt DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model PosSync {
+  id               String   @id @default(cuid())
+  productsReceived Int      @default(0)
+  productsUpserted Int      @default(0)
+  errors           Int      @default(0)
+  agentVersion     String?
+  syncedAt         DateTime @default(now())
+  createdAt        DateTime @default(now())
+}
