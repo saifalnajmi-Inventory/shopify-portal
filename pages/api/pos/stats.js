@@ -1,10 +1,10 @@
 /**
  * GET /api/pos/stats
- * Returns POS sync statistics for the dashboard.
+ * Summary counts for the POS Sync dashboard.
  * Auth: super_admin only.
  */
 
-import { db } from '../../../lib/db'
+import { db }         from '../../../lib/db'
 import { requireAuth } from '../../../lib/auth'
 
 export default async function handler(req, res) {
@@ -16,30 +16,36 @@ export default async function handler(req, res) {
   try {
     const [
       totalPos,
-      matchedCount,
+      matched,
+      pending,
+      unmatched,
+      confirmed,
       lastSync,
-      lastMatch,
     ] = await Promise.all([
       db.posProduct.count(),
-      db.posProduct.count({ where: { shopifyId: { not: null } } }),
+      db.posMatch.count({ where: { shopifyVariantId: { not: null } } }),
+      db.posMatch.count({ where: { status: 'pending'   } }),
+      db.posMatch.count({ where: { status: 'unmatched' } }),
+      db.posMatch.count({ where: { status: 'confirmed' } }),
       db.posSync.findFirst({ orderBy: { syncedAt: 'desc' } }),
-      db.posProduct.findFirst({
-        where: { shopifyId: { not: null } },
-        orderBy: { updatedAt: 'desc' },
-        select: { updatedAt: true },
-      }),
     ])
 
     return res.status(200).json({
       ok: true,
       totalPos,
-      matched: matchedCount,
-      unmatched: totalPos - matchedCount,
-      lastSyncedAt: lastSync?.syncedAt ?? null,
+      matched,       // has a Shopify link (pending or confirmed)
+      pending,       // auto-matched, awaiting review
+      unmatched,     // no Shopify counterpart found
+      confirmed,     // user approved the match
+      lastSyncedAt:  lastSync?.syncedAt  ?? null,
       lastSyncStats: lastSync
-        ? { received: lastSync.productsReceived, upserted: lastSync.productsUpserted, errors: lastSync.errors }
+        ? {
+            received:  lastSync.productsReceived,
+            upserted:  lastSync.productsUpserted,
+            matched:   lastSync.matched,
+            errors:    lastSync.errors,
+          }
         : null,
-      lastMatchedAt: lastMatch?.updatedAt ?? null,
     })
   } catch (err) {
     console.error('[POS STATS]', err)

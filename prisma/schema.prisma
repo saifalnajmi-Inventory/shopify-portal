@@ -64,6 +64,7 @@ model Variant {
   orderLineItems  OrderLineItem[]
   draftChanges    DraftChange[]
   restockRule     RestockRule?
+  posMatches      PosMatch[]
 }
 
 model InventoryLevel {
@@ -287,27 +288,71 @@ model AuditLog {
 
 // ─── POS Sync (PROACT GEN Integration) ────────────────────────────────────────
 
+// Raw PROACT GEN data — read-only source of truth from Toshiba SQL Server.
+// Never modified by matching logic. Agent upserts here every 30 min.
 model PosProduct {
-  id               String    @id @default(cuid())
-  barcode          String    @unique           // PROACT Code = primary match key
-  name             String
-  price            Float     @default(0)
-  stockMain        Int       @default(0)       // OUHAD SHOP branch stock
-  stockStore       Int       @default(0)       // STORE branch stock
-  category         String?
-  unit             String?
-  sku              String?                     // PROACT Alt_Code_2 — used for Shopify variant SKU match
-  shopifyId        String?                     // matched Shopify product ID (null = not on Shopify)
+  id           String    @id @default(cuid())
+  barcode      String    @unique           // PROACT Code — primary key from POS
+  name         String
+  price        Float     @default(0)       // Ret_Sell_Price
+  costPrice    Float     @default(0)       // Cost_Price
+  stockMain    Int       @default(0)       // Branch 1 — OUHAD SHOP
+  stockStore   Int       @default(0)       // Branch 2 — STORE
+  category     String?                    // Item_Group
+  unit         String?
+  sku          String?                    // Alt_Code_2 — used for Shopify SKU match
+  status       String?                    // h2 field from PROACT
+  lastSyncedAt DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  match        PosMatch?
+}
+
+// Bridge table — links POS products to Shopify variants.
+// This is the workspace: auto-matched in background, you review and confirm.
+// Nothing goes to Shopify until status = 'confirmed' AND you trigger a push.
+model PosMatch {
+  id               String      @id @default(cuid())
+
+  // POS side (always present)
+  posProductId     String      @unique
+  posProduct       PosProduct  @relation(fields: [posProductId], references: [id], onDelete: Cascade)
+
+  // Shopify side (null = POS-only product, not on Shopify)
   shopifyVariantId String?
-  lastSyncedAt     DateTime  @default(now())
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  variant          Variant?    @relation(fields: [shopifyVariantId], references: [id])
+
+  // Match metadata
+  matchType        String?     // "barcode" | "sku" | "manual" | null (unmatched)
+  status           String      @default("pending")
+  // pending   = auto-matched, awaiting your review
+  // confirmed = you approved this link
+  // rejected  = you said these don't match
+  // unmatched = no Shopify counterpart found
+
+  // Snapshot at last sync — for comparison view (does not modify Shopify/POS tables)
+  posStockMain     Int         @default(0)
+  posStockStore    Int         @default(0)
+  posPrice         Float       @default(0)
+  shopifyStock     Int?
+  shopifyPrice     Float?
+  shopifyStatus    String?     // active | draft | archived
+
+  // Review notes
+  notes            String?
+  confirmedBy      String?
+  confirmedAt      DateTime?
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 }
 
 model PosSync {
   id               String   @id @default(cuid())
   productsReceived Int      @default(0)
   productsUpserted Int      @default(0)
+  matched          Int      @default(0)   // auto-matched in this sync run
   errors           Int      @default(0)
   agentVersion     String?
   syncedAt         DateTime @default(now())

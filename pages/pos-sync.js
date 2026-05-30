@@ -1,114 +1,239 @@
 /**
- * POS Sync — PROACT GEN Integration Hub
+ * POS Sync — PROACT GEN ↔ Shopify comparison hub
  * Super admin only.
  *
- * Shows live sync stats, match results, and unmatched product table.
- * Agent script (proact-sync.ps1) must be running on client's Toshiba.
+ * Shows matched / pending / unmatched products.
+ * Everything auto-syncs in the background — nothing here is manual.
  */
 
 import Head from 'next/head'
 import Layout from '../components/Layout'
 import { useAuth } from './_app'
 import { useRouter } from 'next/router'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
-  Cable, Server, Database, ShoppingBag, ArrowRight,
-  CheckCircle2, Circle, Clock, AlertCircle, RefreshCw,
-  Wifi, WifiOff, Package, Activity, Info, Play,
-  ChevronDown, ChevronUp, Search, X,
+  Cable, CheckCircle2, Clock, AlertCircle,
+  RefreshCw, Wifi, WifiOff, Package, Search, X,
+  ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Minus,
+  ShoppingBag, Server,
 } from 'lucide-react'
 
-// ── Setup steps ──────────────────────────────────────────────────────────────
-const SETUP_STEPS = [
-  {
-    id: 1,
-    title: 'Identify PROACT GEN database',
-    description: 'Explored PROACT SQL Server at 192.168.8.50 via PowerShell. Found M_Item + M_Item_Stock tables with correct column names.',
-    status: 'done',
-  },
-  {
-    id: 2,
-    title: 'Build zero-install sync agent',
-    description: 'PowerShell script (proact-sync.ps1) — no Node.js required. Reads PROACT every 30 min, batches 200 products per POST.',
-    status: 'done',
-  },
-  {
-    id: 3,
-    title: 'Deploy agent on client server',
-    description: 'Transfer proact-sync.ps1 to Toshiba via WhatsApp → run first sync → schedule via Task Scheduler.',
-    status: 'pending',
-  },
-  {
-    id: 4,
-    title: 'Portal receives POS data',
-    description: '/api/pos/sync live on Railway. PosProduct + PosSync tables ready in PostgreSQL.',
-    status: 'done',
-  },
-  {
-    id: 5,
-    title: 'Match POS products to Shopify',
-    description: 'Run Match below — matches by barcode (priority 1) then SKU (priority 2). Unmatched flagged for manual review.',
-    status: 'pending',
-  },
-  {
-    id: 6,
-    title: 'Live sync dashboard active',
-    description: 'View POS stock vs Shopify stock side by side. One-click inventory push to Shopify.',
-    status: 'pending',
-  },
-]
-
-const STATUS_CONFIG = {
-  done:        { icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 border-emerald-200', label: 'Done' },
-  in_progress: { icon: RefreshCw,    color: 'text-indigo-500',  bg: 'bg-indigo-50 border-indigo-200',   label: 'In Progress' },
-  pending:     { icon: Circle,       color: 'text-slate-300',   bg: 'bg-white border-slate-200',        label: 'Pending' },
-}
-
-function fmt(n) {
-  if (n == null) return '—'
-  return Number(n).toLocaleString()
-}
-
-function fmtDate(d) {
-  if (!d) return 'Never'
-  const dt = new Date(d)
-  return dt.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-}
-
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(n)    { if (n == null) return '—'; return Number(n).toLocaleString() }
+function fmtPrice(n) { if (n == null) return '—'; return `KD ${Number(n).toFixed(3)}` }
 function ago(d) {
   if (!d) return null
   const diff = Date.now() - new Date(d).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1)   return 'just now'
-  if (mins < 60)  return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24)   return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+  const m = Math.floor(diff / 60000)
+  if (m < 1)  return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
 }
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, icon: Icon, color = 'indigo', loading }) {
-  const colors = {
-    indigo:  { bg: 'bg-indigo-50',  icon: 'text-indigo-500',  val: 'text-indigo-700' },
-    emerald: { bg: 'bg-emerald-50', icon: 'text-emerald-500', val: 'text-emerald-700' },
-    amber:   { bg: 'bg-amber-50',   icon: 'text-amber-500',   val: 'text-amber-700' },
-    rose:    { bg: 'bg-rose-50',    icon: 'text-rose-500',    val: 'text-rose-700' },
-    slate:   { bg: 'bg-slate-50',   icon: 'text-slate-500',   val: 'text-slate-700' },
+const STATUS_TABS = [
+  { key: 'all',       label: 'All',       color: 'slate'   },
+  { key: 'pending',   label: 'Pending',   color: 'indigo'  },
+  { key: 'confirmed', label: 'Confirmed', color: 'emerald' },
+  { key: 'unmatched', label: 'Unmatched', color: 'amber'   },
+  { key: 'rejected',  label: 'Rejected',  color: 'rose'    },
+]
+
+const TAB_COLORS = {
+  slate:   { active: 'bg-slate-800 text-white',   dot: '' },
+  indigo:  { active: 'bg-indigo-600 text-white',  dot: 'bg-indigo-400' },
+  emerald: { active: 'bg-emerald-600 text-white', dot: 'bg-emerald-400' },
+  amber:   { active: 'bg-amber-500 text-white',   dot: 'bg-amber-400' },
+  rose:    { active: 'bg-rose-500 text-white',     dot: 'bg-rose-400' },
+}
+
+function StatPill({ label, value, color = 'slate', loading }) {
+  const cls = {
+    slate:   'bg-slate-100 text-slate-700',
+    indigo:  'bg-indigo-50 text-indigo-700 border border-indigo-200',
+    emerald: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    amber:   'bg-amber-50 text-amber-700 border border-amber-200',
+    rose:    'bg-rose-50 text-rose-700 border border-rose-200',
   }
-  const c = colors[color] || colors.indigo
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4">
-      <div className="flex items-start justify-between mb-2">
-        <div className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center`}>
-          <Icon size={16} className={c.icon} />
-        </div>
-      </div>
-      <div className={`text-2xl font-bold ${c.val} mb-0.5`}>
-        {loading ? <span className="text-slate-300 animate-pulse">…</span> : (value ?? '—')}
-      </div>
-      <div className="text-xs text-slate-500 font-medium">{label}</div>
-      {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
+    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold ${cls[color]}`}>
+      <span className="text-[10px] font-medium opacity-70">{label}</span>
+      <span className="font-bold">{loading ? '…' : fmt(value)}</span>
     </div>
+  )
+}
+
+function StockDiff({ pos, shopify }) {
+  if (shopify == null) return <span className="text-slate-300 text-xs">—</span>
+  const diff = pos - shopify
+  if (diff === 0) return (
+    <span className="flex items-center gap-1 text-emerald-600 text-xs font-semibold">
+      <Minus size={11} /> Same
+    </span>
+  )
+  if (diff > 0) return (
+    <span className="flex items-center gap-1 text-indigo-600 text-xs font-semibold">
+      <ArrowUp size={11} /> POS +{diff}
+    </span>
+  )
+  return (
+    <span className="flex items-center gap-1 text-amber-600 text-xs font-semibold">
+      <ArrowDown size={11} /> Shopify +{Math.abs(diff)}
+    </span>
+  )
+}
+
+function StatusBadge({ status }) {
+  const cfg = {
+    pending:   { cls: 'bg-indigo-50 text-indigo-700 border-indigo-200',  label: 'Pending review' },
+    confirmed: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Confirmed' },
+    rejected:  { cls: 'bg-rose-50 text-rose-700 border-rose-200',        label: 'Rejected' },
+    unmatched: { cls: 'bg-amber-50 text-amber-700 border-amber-200',     label: 'No Shopify match' },
+  }
+  const { cls, label } = cfg[status] || cfg.unmatched
+  return (
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cls}`}>
+      {label}
+    </span>
+  )
+}
+
+// ── Row component ─────────────────────────────────────────────────────────────
+function ComparisonRow({ row, onStatusChange, updating }) {
+  const pos   = row.posProduct
+  const match = row.variant
+
+  return (
+    <tr className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors group">
+
+      {/* POS product */}
+      <td className="px-4 py-3">
+        <div className="flex items-start gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0 mt-0.5">
+            <Server size={12} className="text-orange-400" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-800 truncate max-w-[180px]" title={pos.name}>
+              {pos.name || '—'}
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] text-slate-400 font-mono">{pos.barcode}</span>
+              {pos.sku && <span className="text-[10px] text-indigo-400 font-mono">· {pos.sku}</span>}
+            </div>
+          </div>
+        </div>
+      </td>
+
+      {/* POS stock */}
+      <td className="px-4 py-3 text-center">
+        <div className="text-sm font-bold text-slate-700">{fmt(pos.stockMain + pos.stockStore)}</div>
+        <div className="text-[10px] text-slate-400">{fmt(pos.stockMain)} + {fmt(pos.stockStore)}</div>
+      </td>
+
+      {/* POS price */}
+      <td className="px-4 py-3 text-center">
+        <span className="text-sm font-semibold text-slate-700">{fmtPrice(pos.price)}</span>
+      </td>
+
+      {/* Stock diff */}
+      <td className="px-4 py-3 text-center">
+        <StockDiff pos={pos.stockMain + pos.stockStore} shopify={row.shopifyStock} />
+      </td>
+
+      {/* Shopify product */}
+      <td className="px-4 py-3">
+        {match ? (
+          <div className="flex items-start gap-2.5">
+            {match.product?.firstImageSrc ? (
+              <img
+                src={match.product.firstImageSrc}
+                alt=""
+                className="w-7 h-7 rounded-lg object-cover shrink-0 border border-slate-200 mt-0.5"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
+                <ShoppingBag size={12} className="text-emerald-500" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-800 truncate max-w-[180px]" title={match.product?.title}>
+                {match.product?.title || '—'}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {match.sku && <span className="text-[10px] text-slate-400 font-mono">{match.sku}</span>}
+                <span className={`text-[10px] font-bold ${
+                  match.product?.status === 'active'   ? 'text-emerald-500' :
+                  match.product?.status === 'draft'    ? 'text-slate-400' :
+                  'text-rose-400'
+                }`}>{match.product?.status}</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-300 italic">Not on Shopify</span>
+        )}
+      </td>
+
+      {/* Shopify stock */}
+      <td className="px-4 py-3 text-center">
+        {row.shopifyStock != null
+          ? <span className="text-sm font-bold text-slate-700">{fmt(row.shopifyStock)}</span>
+          : <span className="text-slate-300 text-sm">—</span>
+        }
+      </td>
+
+      {/* Shopify price */}
+      <td className="px-4 py-3 text-center">
+        {row.shopifyPrice != null
+          ? <span className="text-sm font-semibold text-slate-700">{fmtPrice(row.shopifyPrice)}</span>
+          : <span className="text-slate-300 text-sm">—</span>
+        }
+      </td>
+
+      {/* Match type + status */}
+      <td className="px-4 py-3">
+        <div className="flex flex-col gap-1 items-start">
+          <StatusBadge status={row.status} />
+          {row.matchType && (
+            <span className="text-[10px] text-slate-400 font-medium">via {row.matchType}</span>
+          )}
+        </div>
+      </td>
+
+      {/* Actions */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {row.status !== 'confirmed' && row.variant && (
+            <button
+              disabled={updating}
+              onClick={() => onStatusChange(row.id, 'confirmed')}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors"
+            >
+              Confirm
+            </button>
+          )}
+          {row.status !== 'rejected' && (
+            <button
+              disabled={updating}
+              onClick={() => onStatusChange(row.id, 'rejected')}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40 transition-colors"
+            >
+              Reject
+            </button>
+          )}
+          {(row.status === 'confirmed' || row.status === 'rejected') && (
+            <button
+              disabled={updating}
+              onClick={() => onStatusChange(row.id, 'pending')}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100 disabled:opacity-40 transition-colors"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
   )
 }
 
@@ -117,90 +242,112 @@ export default function PosSyncPage() {
   const { user, authLoading } = useAuth()
   const router = useRouter()
 
-  const [stats, setStats]           = useState(null)
+  const [stats,       setStats]       = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
+  const [rows,        setRows]        = useState([])
+  const [total,       setTotal]       = useState(0)
+  const [pages,       setPages]       = useState(1)
+  const [tableLoading, setTableLoading] = useState(true)
+  const [activeTab,   setActiveTab]   = useState('all')
+  const [page,        setPage]        = useState(1)
+  const [search,      setSearch]      = useState('')
+  const [debouncedQ,  setDebouncedQ]  = useState('')
+  const [updating,    setUpdating]    = useState(false)
+  const searchTimer = useRef(null)
 
-  const [matching, setMatching]         = useState(false)
-  const [matchResult, setMatchResult]   = useState(null) // last match response
-  const [matchError, setMatchError]     = useState(null)
-  const [showUnmatched, setShowUnmatched] = useState(false)
-  const [search, setSearch]             = useState('')
-
-  // Guard — super_admin only
+  // Guard
   useEffect(() => {
     if (!authLoading && user && user.role !== 'super_admin') router.replace('/')
   }, [user, authLoading, router])
 
+  // Debounce search
+  useEffect(() => {
+    clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => { setDebouncedQ(search); setPage(1) }, 350)
+    return () => clearTimeout(searchTimer.current)
+  }, [search])
+
   // Load stats
   const loadStats = useCallback(async () => {
+    setStatsLoading(true)
     try {
-      setStatsLoading(true)
       const r = await fetch('/api/pos/stats')
       if (r.ok) setStats(await r.json())
-    } catch { /* ignore */ } finally {
-      setStatsLoading(false)
-    }
+    } catch { /* ignore */ }
+    setStatsLoading(false)
   }, [])
 
-  useEffect(() => { loadStats() }, [loadStats])
-
-  // Run match
-  async function runMatch() {
-    setMatching(true)
-    setMatchError(null)
-    setMatchResult(null)
+  // Load table
+  const loadTable = useCallback(async () => {
+    setTableLoading(true)
     try {
-      const r = await fetch('/api/pos/match', { method: 'POST' })
-      const data = await r.json()
-      if (!r.ok) throw new Error(data.error || 'Match failed')
-      setMatchResult(data)
-      setShowUnmatched(data.unmatched > 0)
-      await loadStats() // refresh counts
-    } catch (e) {
-      setMatchError(e.message)
-    } finally {
-      setMatching(false)
-    }
+      const params = new URLSearchParams({
+        status: activeTab,
+        page:   String(page),
+        limit:  '50',
+        q:      debouncedQ,
+      })
+      const r = await fetch(`/api/pos/comparison?${params}`)
+      if (r.ok) {
+        const d = await r.json()
+        setRows(d.rows || [])
+        setTotal(d.total || 0)
+        setPages(d.pages || 1)
+      }
+    } catch { /* ignore */ }
+    setTableLoading(false)
+  }, [activeTab, page, debouncedQ])
+
+  useEffect(() => { loadStats() }, [loadStats])
+  useEffect(() => { loadTable() }, [loadTable])
+
+  // Switch tab
+  function switchTab(key) {
+    setActiveTab(key)
+    setPage(1)
+  }
+
+  // Update row status
+  async function handleStatusChange(matchId, newStatus) {
+    setUpdating(true)
+    try {
+      await fetch('/api/pos/update-match', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ matchId, status: newStatus }),
+      })
+      await Promise.all([loadTable(), loadStats()])
+    } catch { /* ignore */ }
+    setUpdating(false)
   }
 
   if (authLoading || !user) return null
   if (user.role !== 'super_admin') return null
 
-  const doneCount      = SETUP_STEPS.filter(s => s.status === 'done').length
-  const agentConnected = stats && stats.lastSyncedAt
-  const syncAgo        = stats ? ago(stats.lastSyncedAt) : null
-
-  const filteredUnmatched = (matchResult?.unmatchedSample || []).filter(p => {
-    if (!search.trim()) return true
-    const q = search.toLowerCase()
-    return (
-      (p.name    || '').toLowerCase().includes(q) ||
-      (p.barcode || '').toLowerCase().includes(q) ||
-      (p.sku     || '').toLowerCase().includes(q)
-    )
-  })
+  const agentConnected = stats?.lastSyncedAt
+  const syncAgo        = ago(stats?.lastSyncedAt)
 
   return (
     <Layout>
       <Head><title>POS Sync — Inventory Portal</title></Head>
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-5">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
-            <Cable size={22} className="text-slate-700" />
+            <Cable size={20} className="text-slate-700" />
             <h1 className="text-2xl font-bold text-slate-800">POS Sync</h1>
           </div>
-          <p className="text-sm text-slate-500">
-            PROACT GEN ↔ Portal ↔ Shopify — super admin only
+          <p className="text-sm text-slate-400">
+            PROACT GEN ↔ Shopify · auto-synced every 30 min · super admin only
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={loadStats}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-            title="Refresh stats"
+            onClick={() => { loadStats(); loadTable() }}
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            title="Refresh"
           >
             <RefreshCw size={15} />
           </button>
@@ -210,317 +357,151 @@ export default function PosSyncPage() {
               : 'bg-slate-100 border-slate-200 text-slate-500'
           }`}>
             {agentConnected
-              ? <><Wifi size={12} /> Agent Active · {syncAgo}</>
-              : <><WifiOff size={12} /> Agent Not Connected</>
+              ? <><Wifi size={11} /> Agent active · {syncAgo}</>
+              : <><WifiOff size={11} /> Agent not connected</>
             }
           </div>
         </div>
       </div>
 
-      {/* ── Stats row ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          label="POS Products"
-          value={fmt(stats?.totalPos)}
-          sub={stats?.lastSyncedAt ? `Last sync ${fmtDate(stats.lastSyncedAt)}` : 'Not synced yet'}
-          icon={Package}
-          color="indigo"
-          loading={statsLoading}
-        />
-        <StatCard
-          label="Matched to Shopify"
-          value={fmt(stats?.matched)}
-          sub={stats?.totalPos ? `${Math.round((stats.matched / stats.totalPos) * 100) || 0}% of POS catalog` : null}
-          icon={CheckCircle2}
-          color="emerald"
-          loading={statsLoading}
-        />
-        <StatCard
-          label="POS Only (unmatched)"
-          value={fmt(stats?.unmatched)}
-          sub="Not on Shopify yet"
-          icon={AlertCircle}
-          color={stats?.unmatched > 0 ? 'amber' : 'slate'}
-          loading={statsLoading}
-        />
-        <StatCard
-          label="Last Sync"
-          value={stats?.lastSyncedAt ? syncAgo : '—'}
-          sub={stats?.lastSyncStats ? `${fmt(stats.lastSyncStats.upserted)} upserted · ${fmt(stats.lastSyncStats.errors)} errors` : 'Run agent on Toshiba'}
-          icon={Activity}
-          color="slate"
-          loading={statsLoading}
-        />
+      {/* ── Stat pills ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-2 mb-5">
+        <StatPill label="POS products"  value={stats?.totalPos}   color="slate"   loading={statsLoading} />
+        <StatPill label="Matched"       value={stats?.matched}    color="indigo"  loading={statsLoading} />
+        <StatPill label="Pending review" value={stats?.pending}   color="indigo"  loading={statsLoading} />
+        <StatPill label="Confirmed"     value={stats?.confirmed}  color="emerald" loading={statsLoading} />
+        <StatPill label="No Shopify match" value={stats?.unmatched} color="amber" loading={statsLoading} />
+        {stats?.lastSyncStats && (
+          <StatPill label="Last sync errors" value={stats.lastSyncStats.errors} color={stats.lastSyncStats.errors > 0 ? 'rose' : 'slate'} />
+        )}
       </div>
 
-      {/* ── Architecture ────────────────────────────────────────────────────── */}
-      <div className="bg-slate-900 rounded-2xl p-5 mb-6 text-white">
-        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-4">Data Flow</p>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="w-12 h-12 rounded-xl bg-slate-700 flex items-center justify-center">
-              <Server size={22} className="text-orange-400" />
-            </div>
-            <span className="text-[10px] text-slate-400 font-medium text-center leading-tight">PROACT GEN<br/>SQL Server</span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <ArrowRight size={16} className="text-slate-500" />
-            <span className="text-[9px] text-slate-600">agent · 30 min</span>
-          </div>
-          <div className="flex flex-col items-center gap-1.5">
-            <div className={`w-12 h-12 rounded-xl ${agentConnected ? 'bg-indigo-600' : 'bg-slate-700'} flex items-center justify-center transition-colors`}>
-              <Database size={22} className="text-white" />
-            </div>
-            <span className="text-[10px] text-slate-400 font-medium text-center leading-tight">Portal<br/>Railway DB</span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <ArrowRight size={16} className="text-slate-500" />
-            <span className="text-[9px] text-slate-600">on demand</span>
-          </div>
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="w-12 h-12 rounded-xl bg-emerald-700 flex items-center justify-center">
-              <ShoppingBag size={22} className="text-white" />
-            </div>
-            <span className="text-[10px] text-slate-400 font-medium text-center leading-tight">Shopify<br/>Store</span>
-          </div>
-        </div>
-        <p className="text-[10px] text-slate-500 mt-4">
-          The PowerShell agent runs silently on the client's Toshiba. It reads PROACT GEN's SQL Server
-          locally and pushes to this portal via outbound HTTPS — no firewall changes required.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-        {/* ── Left: Setup + Match ─────────────────────────────────────────────── */}
-        <div className="lg:col-span-2 space-y-5">
-
-          {/* Setup progress */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-slate-800 text-sm">Setup Progress</h2>
-              <span className="text-xs text-slate-500 font-medium">{doneCount} / {SETUP_STEPS.length} complete</span>
-            </div>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 mb-5">
-              <div
-                className="bg-indigo-500 h-1.5 rounded-full transition-all"
-                style={{ width: `${(doneCount / SETUP_STEPS.length) * 100}%` }}
-              />
-            </div>
-            <div className="space-y-2.5">
-              {SETUP_STEPS.map(step => {
-                const { icon: Icon, color, bg, label } = STATUS_CONFIG[step.status]
-                return (
-                  <div key={step.id} className={`flex items-start gap-3 p-3 rounded-xl border ${bg}`}>
-                    <Icon size={17} className={`${color} shrink-0 mt-0.5 ${step.status === 'in_progress' ? 'animate-spin' : ''}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[10px] font-bold text-slate-400">STEP {step.id}</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wide ${color}`}>{label}</span>
-                      </div>
-                      <p className="text-sm font-semibold text-slate-800">{step.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{step.description}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Match panel */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="font-bold text-slate-800 text-sm">Product Matching</h2>
-              {matchResult && (
-                <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  Last run: {matchResult.matchedByBarcode + matchResult.matchedBySku} newly matched
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              Matches POS products to Shopify variants — first by barcode, then by SKU (Alt_Code_2).
-              Run this after every POS sync to keep the match table current.
-            </p>
-
+      {/* ── Tabs ────────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+        {STATUS_TABS.map(tab => {
+          const isActive = activeTab === tab.key
+          const c        = TAB_COLORS[tab.color]
+          return (
             <button
-              onClick={runMatch}
-              disabled={matching || statsLoading}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                matching
-                  ? 'bg-indigo-100 text-indigo-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow'
+              key={tab.key}
+              onClick={() => switchTab(tab.key)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                isActive ? c.active : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
               }`}
             >
-              {matching
-                ? <><RefreshCw size={14} className="animate-spin" /> Matching…</>
-                : <><Play size={14} /> Run Match Now</>
-              }
-            </button>
-
-            {matchError && (
-              <div className="mt-3 flex items-start gap-2 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
-                <AlertCircle size={13} className="shrink-0 mt-0.5" />
-                {matchError}
-              </div>
-            )}
-
-            {matchResult && (
-              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { label: 'Already matched', value: matchResult.alreadyMatched, color: 'text-slate-600' },
-                  { label: 'Matched by barcode', value: matchResult.matchedByBarcode, color: 'text-emerald-600' },
-                  { label: 'Matched by SKU', value: matchResult.matchedBySku, color: 'text-indigo-600' },
-                  { label: 'Unmatched', value: matchResult.unmatched, color: matchResult.unmatched > 0 ? 'text-amber-600' : 'text-slate-600' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                    <div className={`text-xl font-bold ${color}`}>{fmt(value)}</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">{label}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Unmatched products table */}
-          {matchResult && matchResult.unmatched > 0 && (
-            <div className="bg-white rounded-2xl border border-amber-200 p-5">
-              <button
-                onClick={() => setShowUnmatched(v => !v)}
-                className="w-full flex items-center justify-between mb-0"
-              >
-                <div>
-                  <h2 className="font-bold text-slate-800 text-sm text-left">
-                    Unmatched Products
-                    <span className="ml-2 text-amber-600 bg-amber-50 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      {matchResult.unmatched}
-                    </span>
-                  </h2>
-                  <p className="text-xs text-slate-400 text-left mt-0.5">
-                    {matchResult.unmatchedSample?.length < matchResult.unmatched
-                      ? `Showing first ${matchResult.unmatchedSample.length} of ${matchResult.unmatched}`
-                      : 'All unmatched products shown below'}
-                  </p>
-                </div>
-                {showUnmatched ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
-              </button>
-
-              {showUnmatched && (
-                <div className="mt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="relative flex-1">
-                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Search by name, barcode, or SKU…"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                      />
-                      {search && (
-                        <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                          <X size={13} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto rounded-xl border border-slate-100">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-100">
-                          <th className="text-left px-3 py-2.5 font-semibold text-slate-500">Name</th>
-                          <th className="text-left px-3 py-2.5 font-semibold text-slate-500">Barcode</th>
-                          <th className="text-left px-3 py-2.5 font-semibold text-slate-500">SKU</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-slate-500">Stock</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredUnmatched.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="text-center py-8 text-slate-400">No results for &quot;{search}&quot;</td>
-                          </tr>
-                        ) : filteredUnmatched.map((p, i) => (
-                          <tr key={i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                            <td className="px-3 py-2.5 font-medium text-slate-700 max-w-[200px] truncate">{p.name || '—'}</td>
-                            <td className="px-3 py-2.5 text-slate-500 font-mono">{p.barcode || '—'}</td>
-                            <td className="px-3 py-2.5 text-slate-500 font-mono">{p.sku || <span className="text-rose-400">missing</span>}</td>
-                            <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{fmt(p.stock)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="mt-3 flex gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                    <Info size={13} className="text-amber-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-700 leading-relaxed">
-                      These products exist in PROACT but have no matching Shopify variant.
-                      Add SKU codes (Alt_Code_2 in PROACT) matching Shopify variant SKUs to improve auto-matching,
-                      or create these products in Shopify first and re-run the match.
-                    </p>
-                  </div>
-                </div>
+              {!isActive && tab.color !== 'slate' && (
+                <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
               )}
-            </div>
+              {tab.label}
+            </button>
+          )
+        })}
+
+        {/* Search */}
+        <div className="relative ml-auto">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search name, barcode, SKU…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-8 pr-8 py-1.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 w-52"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              <X size={12} />
+            </button>
           )}
-
-        </div>
-
-        {/* ── Right: POS info + agent instructions ────────────────────────────── */}
-        <div className="space-y-4">
-
-          {/* POS system info */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <h2 className="font-bold text-slate-800 text-sm mb-3">POS System</h2>
-            <div className="space-y-2.5">
-              {[
-                { label: 'Software',       value: 'PROACT GEN' },
-                { label: 'Hardware',       value: 'Toshiba (Windows)' },
-                { label: 'DB Server',      value: '192.168.8.50' },
-                { label: 'Database',       value: 'PROACT' },
-                { label: 'DB Type',        value: 'SQL Server' },
-                { label: 'Branches',       value: 'OUHAD SHOP · STORE' },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400 text-xs">{label}</span>
-                  <span className="font-semibold text-slate-800 text-xs text-right">{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Agent setup instructions */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <h2 className="font-bold text-slate-800 text-sm mb-3">Agent Setup</h2>
-            <ol className="space-y-2.5">
-              {[
-                'Send proact-sync.ps1 to Toshiba via WhatsApp',
-                'Save to: C:\\Users\\user\\Documents\\',
-                'Right-click → Run with PowerShell',
-                'Check log: proact-sync-log.txt',
-                'Schedule via Task Scheduler (every 30 min)',
-              ].map((step, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
-                  <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-600 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-                    {i + 1}
-                  </span>
-                  {step}
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          {/* Info note */}
-          <div className="flex gap-2.5 p-3.5 bg-indigo-50 border border-indigo-100 rounded-xl">
-            <Info size={13} className="text-indigo-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-indigo-700 leading-relaxed">
-              No existing features are affected. POS data lives in a separate table and
-              only syncs to Shopify when you explicitly trigger it.
-            </p>
-          </div>
-
         </div>
       </div>
+
+      {/* ── Table ───────────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+
+        {/* Agent not connected notice */}
+        {!agentConnected && !statsLoading && (
+          <div className="flex items-center gap-3 p-4 bg-amber-50 border-b border-amber-100">
+            <WifiOff size={15} className="text-amber-500 shrink-0" />
+            <div className="text-xs text-amber-700">
+              <span className="font-bold">Agent not connected.</span>
+              {' '}Send <code className="bg-amber-100 px-1 rounded">proact-sync.ps1</code> to the Toshiba via WhatsApp, save it to{' '}
+              <code className="bg-amber-100 px-1 rounded">C:\Users\user\Documents\</code> and run it.
+              The table below will populate automatically.
+            </div>
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[900px]">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50">
+                <th className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Product</th>
+                <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Stock</th>
+                <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">POS Price</th>
+                <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Diff</th>
+                <th className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Shopify Product</th>
+                <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Shopify Stock</th>
+                <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Shopify Price</th>
+                <th className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Match</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {tableLoading ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="border-b border-slate-50">
+                    {Array.from({ length: 9 }).map((_, j) => (
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-4 bg-slate-100 rounded animate-pulse" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="text-center py-16 text-slate-400">
+                    <Package size={32} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-sm font-medium">
+                      {search ? `No results for "${search}"` : 'No products yet — run the agent on Toshiba to populate this table'}
+                    </p>
+                  </td>
+                </tr>
+              ) : rows.map(row => (
+                <ComparisonRow
+                  key={row.id}
+                  row={row}
+                  onStatusChange={handleStatusChange}
+                  updating={updating}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {pages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+            <span className="text-xs text-slate-400">{fmt(total)} total · page {page} of {pages}</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={15} />
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(pages, p + 1))}
+                disabled={page >= pages}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
     </Layout>
   )
 }
