@@ -7,7 +7,6 @@
  */
 
 import Head from 'next/head'
-import Layout from '../components/Layout'
 import { useAuth } from './_app'
 import { useRouter } from 'next/router'
 import { useEffect, useState, useCallback, useRef } from 'react'
@@ -328,7 +327,7 @@ export default function PosSyncPage() {
   const syncAgo        = ago(stats?.lastSyncedAt)
 
   return (
-    <Layout>
+    <>
       <Head><title>POS Sync — Inventory Portal</title></Head>
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
@@ -502,6 +501,6 @@ export default function PosSyncPage() {
         )}
       </div>
 
-    </Layout>
+    </>
   )
 }
