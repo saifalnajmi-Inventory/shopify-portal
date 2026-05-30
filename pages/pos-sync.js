@@ -406,6 +406,7 @@ export default function PosSyncPage() {
   const [debouncedQ,  setDebouncedQ]  = useState('')
   const [updating,    setUpdating]    = useState(false)
   const [linkRow,     setLinkRow]     = useState(null)  // row for the manual-link modal
+  const [stockFilter, setStockFilter] = useState('all') // all | in | out
   const searchTimer = useRef(null)
 
   // Guard — super_admin + owner can access POS Sync
@@ -436,6 +437,7 @@ export default function PosSyncPage() {
     try {
       const params = new URLSearchParams({
         status: activeTab,
+        stock:  stockFilter,
         page:   String(page),
         limit:  '50',
         q:      debouncedQ,
@@ -449,7 +451,7 @@ export default function PosSyncPage() {
       }
     } catch { /* ignore */ }
     setTableLoading(false)
-  }, [activeTab, page, debouncedQ])
+  }, [activeTab, stockFilter, page, debouncedQ])
 
   useEffect(() => { loadStats() }, [loadStats])
   useEffect(() => { loadTable() }, [loadTable])
@@ -457,6 +459,12 @@ export default function PosSyncPage() {
   // Switch tab
   function switchTab(key) {
     setActiveTab(key)
+    setPage(1)
+  }
+
+  // Switch stock filter
+  function switchStock(key) {
+    setStockFilter(key)
     setPage(1)
   }
 
@@ -571,6 +579,30 @@ export default function PosSyncPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* ── Stock filter ────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">POS Stock:</span>
+        {[
+          { key: 'all', label: 'All'         },
+          { key: 'in',  label: 'In Stock'    },
+          { key: 'out', label: 'Out of Stock' },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => switchStock(key)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+              stockFilter === key
+                ? key === 'in'  ? 'bg-emerald-600 text-white border-emerald-600'
+                : key === 'out' ? 'bg-rose-500 text-white border-rose-500'
+                :                 'bg-slate-800 text-white border-slate-800'
+                : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* ── Table ───────────────────────────────────────────────────────────── */}
