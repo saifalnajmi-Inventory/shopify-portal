@@ -384,7 +384,7 @@ function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelec
             </button>
           )}
           {/* Activate — confirmed rows where Shopify product is still draft */}
-          {row.status === 'confirmed' && row.shopifyStatus === 'draft' && (
+          {row.status === 'confirmed' && (row.variant?.product?.status === 'draft' || row.shopifyStatus === 'draft') && (
             <button disabled={updating} onClick={() => onActivate(row.id)}
               title="Set Shopify product to Active"
               className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 disabled:opacity-40 transition-colors flex items-center gap-1">

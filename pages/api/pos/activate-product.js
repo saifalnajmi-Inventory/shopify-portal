@@ -37,11 +37,7 @@ async function handler(req, res) {
     const product = match.variant.product
     if (!product) return res.status(400).json({ error: 'No Shopify product found' })
 
-    if (product.status === 'active') {
-      return res.json({ ok: true, alreadyActive: true })
-    }
-
-    // Push to Shopify
+    // Always push to Shopify regardless of local DB status (DB may be stale)
     await updateProduct(product.id, { status: 'active' })
 
     // Update local DB
