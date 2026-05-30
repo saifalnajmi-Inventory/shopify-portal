@@ -1,14 +1,12 @@
 /**
  * POST /api/pos/sync
  * Receives product + stock data from the PROACT GEN PowerShell agent.
- * Upserts PosProduct records (raw POS data — never touched by matching logic).
- * Immediately auto-runs the background match engine after saving.
+ * Uses raw SQL to bypass any Prisma client caching issues.
  *
- * Auth: x-sync-key header (INTERNAL_SYNC_KEY env var)
+ * Auth: x-sync-key header
  */
 
-import { db }          from '../../../lib/db'
-import { runPosMatch } from '../../../lib/posMatch'
+import { db } from '../../../lib/db'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -19,12 +17,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  let body = req.body
-  if (!body || typeof body === 'string') {
-    try { body = JSON.parse(body) } catch { return res.status(400).json({ error: 'Invalid JSON' }) }
-  }
-
-  const { products, syncedAt, agentVersion } = body || {}
+  const body = req.body || {}
+  const { products, syncedAt, agentVersion } = body
   if (!Array.isArray(products) || products.length === 0) {
     return res.status(400).json({ error: 'No products provided' })
   }
@@ -33,77 +27,107 @@ export default async function handler(req, res) {
   let errors   = 0
 
   try {
+    // Ensure PosProduct table exists (create if not)
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "PosProduct" (
+        id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        barcode          TEXT UNIQUE NOT NULL,
+        name             TEXT NOT NULL DEFAULT '',
+        price            DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "costPrice"      DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "stockMain"      INTEGER NOT NULL DEFAULT 0,
+        "stockStore"     INTEGER NOT NULL DEFAULT 0,
+        category         TEXT,
+        unit             TEXT,
+        sku              TEXT,
+        status           TEXT,
+        "lastSyncedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
 
-  // ── 1. Upsert raw POS data ────────────────────────────────────────────────
-  for (const p of products) {
-    if (!p.barcode || !String(p.barcode).trim()) { errors++; continue }
-    try {
-      await db.posProduct.upsert({
-        where:  { barcode: String(p.barcode).trim() },
-        update: {
-          name:         String(p.name  || ''),
-          price:        Number(p.price)     || 0,
-          costPrice:    Number(p.costPrice) || 0,
-          stockMain:    Number(p.stockMain) || 0,
-          stockStore:   Number(p.stockStore)|| 0,
-          category:     p.category || null,
-          unit:         p.unit     || null,
-          sku:          p.sku      || null,
-          status:       p.status   || null,
-          lastSyncedAt: new Date(),
-        },
-        create: {
-          barcode:      String(p.barcode).trim(),
-          name:         String(p.name  || ''),
-          price:        Number(p.price)     || 0,
-          costPrice:    Number(p.costPrice) || 0,
-          stockMain:    Number(p.stockMain) || 0,
-          stockStore:   Number(p.stockStore)|| 0,
-          category:     p.category || null,
-          unit:         p.unit     || null,
-          sku:          p.sku      || null,
-          status:       p.status   || null,
-          lastSyncedAt: new Date(),
-        },
-      })
-      upserted++
-    } catch {
-      errors++
+    // Ensure PosSync table exists
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "PosSync" (
+        id                 TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "productsReceived" INTEGER NOT NULL DEFAULT 0,
+        "productsUpserted" INTEGER NOT NULL DEFAULT 0,
+        matched            INTEGER NOT NULL DEFAULT 0,
+        errors             INTEGER NOT NULL DEFAULT 0,
+        "agentVersion"     TEXT,
+        "syncedAt"         TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
+    // Upsert each product via raw SQL
+    for (const p of products) {
+      const barcode = String(p.barcode || '').trim()
+      if (!barcode) { errors++; continue }
+
+      try {
+        await db.$executeRawUnsafe(`
+          INSERT INTO "PosProduct"
+            (id, barcode, name, price, "costPrice", "stockMain", "stockStore",
+             category, unit, sku, status, "lastSyncedAt", "createdAt", "updatedAt")
+          VALUES
+            (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+             CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT (barcode) DO UPDATE SET
+            name           = EXCLUDED.name,
+            price          = EXCLUDED.price,
+            "costPrice"    = EXCLUDED."costPrice",
+            "stockMain"    = EXCLUDED."stockMain",
+            "stockStore"   = EXCLUDED."stockStore",
+            category       = EXCLUDED.category,
+            unit           = EXCLUDED.unit,
+            sku            = EXCLUDED.sku,
+            status         = EXCLUDED.status,
+            "lastSyncedAt" = CURRENT_TIMESTAMP,
+            "updatedAt"    = CURRENT_TIMESTAMP
+        `,
+          barcode,
+          String(p.name || ''),
+          Number(p.price)     || 0,
+          Number(p.costPrice) || 0,
+          Number(p.stockMain) || 0,
+          Number(p.stockStore)|| 0,
+          p.category || null,
+          p.unit     || null,
+          p.sku      || null,
+          p.status   || null,
+        )
+        upserted++
+      } catch (e) {
+        console.error('[POS SYNC] upsert error:', e.message)
+        errors++
+      }
     }
-  }
 
-  // ── 2. Auto-run matching in background ────────────────────────────────────
-  let matchResult = { total: 0, matched: 0, unmatched: 0 }
-  try {
-    matchResult = await runPosMatch()
-  } catch (matchErr) {
-    console.error('[POS SYNC] Match engine error:', matchErr)
-    // Don't fail the whole sync if matching errors
-  }
-
-  // ── 3. Log the sync run ───────────────────────────────────────────────────
-  await db.posSync.create({
-    data: {
-      productsReceived: products.length,
-      productsUpserted: upserted,
-      matched:          matchResult.matched,
+    // Log sync run
+    await db.$executeRawUnsafe(`
+      INSERT INTO "PosSync"
+        (id, "productsReceived", "productsUpserted", matched, errors, "agentVersion", "syncedAt", "createdAt")
+      VALUES
+        (gen_random_uuid()::text, $1, $2, 0, $3, $4, $5, CURRENT_TIMESTAMP)
+    `,
+      products.length,
+      upserted,
       errors,
-      agentVersion: agentVersion || 'unknown',
-      syncedAt:     syncedAt ? new Date(syncedAt) : new Date(),
-    },
-  }).catch(e => console.error('[POS SYNC] Log error:', e))
+      agentVersion || 'ps-1.0',
+      syncedAt ? new Date(syncedAt) : new Date(),
+    ).catch(e => console.error('[POS SYNC] log error:', e.message))
 
-  return res.status(200).json({
-    ok:       true,
-    received: products.length,
-    upserted,
-    errors,
-    matched:  matchResult.matched,
-    unmatched: matchResult.unmatched,
-  })
+    return res.status(200).json({
+      ok:       true,
+      received: products.length,
+      upserted,
+      errors,
+    })
 
-  } catch (fatalErr) {
-    console.error('[POS SYNC] Fatal error:', fatalErr)
-    return res.status(500).json({ error: fatalErr.message || 'Sync failed' })
+  } catch (err) {
+    console.error('[POS SYNC] Fatal:', err)
+    return res.status(500).json({ error: err.message })
   }
 }
