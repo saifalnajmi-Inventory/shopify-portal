@@ -12,15 +12,15 @@
 
 import db            from '../../../lib/db'
 import { withAuth }  from '../../../lib/auth'
-import { updateVariant, setInventoryLevel } from '../../../lib/shopify'
+import { updateVariant, setInventoryLevel, updateProduct } from '../../../lib/shopify'
 
 const ALLOWED_STATUSES = ['confirmed', 'rejected', 'pending']
 
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const user                = req.user   // set by withAuth
-  const { matchId, status } = req.body
+  const user                              = req.user   // set by withAuth
+  const { matchId, status, autoActivate } = req.body
 
   if (!matchId)                           return res.status(400).json({ error: 'matchId required' })
   if (!ALLOWED_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' })
@@ -39,7 +39,7 @@ async function handler(req, res) {
     // ── When confirming: push barcode + stock to Shopify ─────────────────────
     if (status === 'confirmed' && updated.shopifyVariantId) {
       // Run in background so the UI response is fast — errors logged, not surfaced
-      pushToShopify(updated).catch(err =>
+      pushToShopify(updated, !!autoActivate).catch(err =>
         console.error('[POS CONFIRM PUSH]', err)
       )
     }
@@ -54,14 +54,20 @@ async function handler(req, res) {
 /**
  * Push POS barcode + stock to Shopify variant.
  * Runs fire-and-forget after the DB update so the UI responds immediately.
+ * If autoActivate=true and stock > 0 and the Shopify product is draft → set it active.
  */
-async function pushToShopify(match) {
-  // Load POS product + Shopify variant (with inventory levels)
+async function pushToShopify(match, autoActivate = false) {
+  // Load POS product + Shopify variant (with inventory levels + product status)
   const full = await db.posMatch.findUnique({
     where: { id: match.id },
     include: {
-      posProduct:  true,
-      variant:     { include: { inventoryLevels: true } },
+      posProduct: true,
+      variant:    {
+        include: {
+          inventoryLevels: true,
+          product: { select: { id: true, status: true } },
+        },
+      },
     },
   })
   if (!full?.posProduct || !full?.variant) return
@@ -89,10 +95,21 @@ async function pushToShopify(match) {
   })
 
   // 4. Refresh PosMatch snapshot columns
-  await db.posMatch.update({
-    where: { id: match.id },
-    data:  { shopifyStock: total },
-  })
+  const matchUpdate = { shopifyStock: total }
+
+  // 5. Auto-activate draft product if stock > 0 and toggle is on
+  if (autoActivate && total > 0 && variant.product?.status === 'draft') {
+    try {
+      await updateProduct(variant.product.id, { status: 'active' })
+      await db.product.update({ where: { id: variant.product.id }, data: { status: 'active' } })
+      matchUpdate.shopifyStatus = 'active'
+      console.log(`[POS CONFIRM PUSH] Auto-activated product ${variant.product.id}`)
+    } catch (e) {
+      console.error(`[POS CONFIRM PUSH] Auto-activate failed:`, e.message)
+    }
+  }
+
+  await db.posMatch.update({ where: { id: match.id }, data: matchUpdate })
 
   console.log(`[POS CONFIRM PUSH] Pushed barcode=${pos.barcode} stock=${total} to variant ${variant.id}`)
 }

@@ -15,13 +15,13 @@
 
 import db           from '../../../lib/db'
 import { withAuth } from '../../../lib/auth'
-import { updateVariant, setInventoryLevel } from '../../../lib/shopify'
+import { updateVariant, setInventoryLevel, updateProduct } from '../../../lib/shopify'
 
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const user                              = req.user
-  const { posMatchId, shopifyVariantId }  = req.body
+  const user                                          = req.user
+  const { posMatchId, shopifyVariantId, autoActivate } = req.body
 
   if (!posMatchId || !shopifyVariantId)
     return res.status(400).json({ error: 'posMatchId and shopifyVariantId required' })
@@ -90,12 +90,27 @@ async function handler(req, res) {
       data:  { barcode: pos.barcode, inventoryQuantity: total },
     })
 
-    console.log(`[MANUAL LINK] POS ${pos.barcode} → Variant ${shopifyVariantId} (${variant.product?.title}), stock=${total}`)
+    // 5. Auto-activate draft product if stock > 0 and toggle is on
+    let activated = false
+    if (autoActivate && total > 0 && variant.product?.status === 'draft') {
+      try {
+        await updateProduct(variant.product.id, { status: 'active' })
+        await db.product.update({ where: { id: variant.product.id }, data: { status: 'active' } })
+        await db.posMatch.update({ where: { id: posMatchId }, data: { shopifyStatus: 'active' } })
+        activated = true
+        console.log(`[MANUAL LINK] Auto-activated product ${variant.product.id}`)
+      } catch (ae) {
+        console.error(`[MANUAL LINK] Auto-activate failed:`, ae.message)
+      }
+    }
+
+    console.log(`[MANUAL LINK] POS ${pos.barcode} → Variant ${shopifyVariantId} (${variant.product?.title}), stock=${total}${activated ? ', activated' : ''}`)
 
     return res.json({
       ok:         true,
       match:      updated,
       stockPushed: total,
+      activated,
       pushErrors: pushErrors.length ? pushErrors : undefined,
     })
   } catch (err) {

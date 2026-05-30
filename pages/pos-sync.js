@@ -112,7 +112,7 @@ function MarginCell({ cost, shopifyPrice }) {
 }
 
 // ── Manual Link Modal ─────────────────────────────────────────────────────────
-function LinkModal({ row, onClose, onLinked }) {
+function LinkModal({ row, onClose, onLinked, autoActivate }) {
   const [q,        setQ]        = useState('')
   const [results,  setResults]  = useState([])
   const [loading,  setLoading]  = useState(false)
@@ -140,7 +140,7 @@ function LinkModal({ row, onClose, onLinked }) {
       const r = await fetch('/api/pos/manual-link', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ posMatchId: row.id, shopifyVariantId }),
+        body:    JSON.stringify({ posMatchId: row.id, shopifyVariantId, autoActivate }),
       })
       const d = await r.json()
       if (d.ok) { onLinked(); onClose() }
@@ -416,6 +416,10 @@ export default function PosSyncPage() {
   const [selectedIds,   setSelectedIds]   = useState(new Set())
   const [linkRow,       setLinkRow]       = useState(null)
   const [stockFilter,   setStockFilter]   = useState('all')
+  const [autoActivate,  setAutoActivate]  = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('pos_auto_activate') === '1'
+  })
   const searchTimer = useRef(null)
 
   // Guard — super_admin + owner can access POS Sync
@@ -492,7 +496,7 @@ export default function PosSyncPage() {
       await fetch('/api/pos/bulk-action', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ matchIds: ids, status }),
+        body:    JSON.stringify({ matchIds: ids, status, autoActivate }),
       })
       setSelectedIds(new Set())
       await Promise.all([loadTable(), loadStats()])
@@ -507,7 +511,7 @@ export default function PosSyncPage() {
       await fetch('/api/pos/update-match', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ matchId, status: newStatus }),
+        body:    JSON.stringify({ matchId, status: newStatus, autoActivate }),
       })
       await Promise.all([loadTable(), loadStats()])
     } catch { /* ignore */ }
@@ -613,8 +617,8 @@ export default function PosSyncPage() {
         </div>
       </div>
 
-      {/* ── Stock filter ────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 mb-4">
+      {/* ── Stock filter + Auto-activate toggle ─────────────────────────────── */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">POS Stock:</span>
         {[
           { key: 'all', label: 'All'         },
@@ -635,6 +639,28 @@ export default function PosSyncPage() {
             {label}
           </button>
         ))}
+
+        {/* Auto-activate toggle */}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-[11px] text-slate-500 font-medium select-none">
+            Auto-activate draft on confirm
+          </span>
+          <button
+            onClick={() => {
+              const next = !autoActivate
+              setAutoActivate(next)
+              localStorage.setItem('pos_auto_activate', next ? '1' : '0')
+            }}
+            title={autoActivate ? 'Auto-activate ON — draft products will be set to active when stock > 0' : 'Auto-activate OFF'}
+            className={`relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+              autoActivate ? 'bg-emerald-500 focus:ring-emerald-400' : 'bg-slate-200 focus:ring-slate-300'
+            }`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+              autoActivate ? 'translate-x-4' : 'translate-x-0'
+            }`} />
+          </button>
+        </div>
       </div>
 
       {/* ── Table ───────────────────────────────────────────────────────────── */}
@@ -773,6 +799,7 @@ export default function PosSyncPage() {
           row={linkRow}
           onClose={() => setLinkRow(null)}
           onLinked={() => { loadTable(); loadStats() }}
+          autoActivate={autoActivate}
         />
       )}
     </>
