@@ -3,17 +3,14 @@
  * Manually triggers the background match engine.
  * Normally auto-called by /api/pos/sync — this is for manual re-runs.
  *
- * Auth: super_admin only
+ * Auth: manage_settings permission (super_admin / client_admin)
  */
 
-import { requireAuth } from '../../../lib/auth'
+import { withAuth }  from '../../../lib/auth'
 import { runPosMatch } from '../../../lib/posMatch'
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
-
-  const user = await requireAuth(req, res, ['super_admin'])
-  if (!user) return
 
   try {
     const result = await runPosMatch()
@@ -23,3 +20,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message })
   }
 }
+
+export default withAuth(handler, 'manage_settings')

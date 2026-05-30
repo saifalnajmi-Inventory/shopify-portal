@@ -4,17 +4,15 @@
  * Auth: super_admin only.
  */
 
-import db from '../../../lib/db'
-import { requireAuth } from '../../../lib/auth'
+import db          from '../../../lib/db'
+import { withAuth } from '../../../lib/auth'
 
 const ALLOWED_STATUSES = ['confirmed', 'rejected', 'pending']
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const user = await requireAuth(req, res, ['super_admin'])
-  if (!user) return
-
+  const user            = req.user   // set by withAuth
   const { matchId, status } = req.body
 
   if (!matchId)                        return res.status(400).json({ error: 'matchId required' })
@@ -35,3 +33,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message })
   }
 }
+
+export default withAuth(handler, 'manage_settings')
