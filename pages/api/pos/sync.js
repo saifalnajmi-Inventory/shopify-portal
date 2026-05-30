@@ -19,13 +19,20 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const { products, syncedAt, agentVersion } = req.body
+  let body = req.body
+  if (!body || typeof body === 'string') {
+    try { body = JSON.parse(body) } catch { return res.status(400).json({ error: 'Invalid JSON' }) }
+  }
+
+  const { products, syncedAt, agentVersion } = body || {}
   if (!Array.isArray(products) || products.length === 0) {
     return res.status(400).json({ error: 'No products provided' })
   }
 
   let upserted = 0
   let errors   = 0
+
+  try {
 
   // ── 1. Upsert raw POS data ────────────────────────────────────────────────
   for (const p of products) {
@@ -94,4 +101,9 @@ export default async function handler(req, res) {
     matched:  matchResult.matched,
     unmatched: matchResult.unmatched,
   })
+
+  } catch (fatalErr) {
+    console.error('[POS SYNC] Fatal error:', fatalErr)
+    return res.status(500).json({ error: fatalErr.message || 'Sync failed' })
+  }
 }
