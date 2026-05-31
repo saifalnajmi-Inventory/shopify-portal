@@ -3,10 +3,16 @@
  * Receives product + stock data from the PROACT GEN PowerShell agent.
  * Uses raw SQL to bypass any Prisma client caching issues.
  *
+ * After upserting PosProduct data:
+ *   - Detects stock changes on confirmed PosMatch rows
+ *   - Pushes updated stock to Shopify for those products (fire-and-forget)
+ *   - Auto-activates draft products that received stock > 0
+ *
  * Auth: x-sync-key header
  */
 
 import db from '../../../lib/db'
+import { updateVariant, setInventoryLevel, updateProduct } from '../../../lib/shopify'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -119,6 +125,11 @@ export default async function handler(req, res) {
       syncedAt ? new Date(syncedAt) : new Date(),
     ).catch(e => console.error('[POS SYNC] log error:', e.message))
 
+    // ── Fire-and-forget: push stock changes to Shopify for confirmed products ──
+    pushConfirmedStockChanges(products).catch(err =>
+      console.error('[POS SYNC] Stock push error:', err)
+    )
+
     return res.status(200).json({
       ok:       true,
       received: products.length,
@@ -129,5 +140,107 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('[POS SYNC] Fatal:', err)
     return res.status(500).json({ error: err.message })
+  }
+}
+
+/**
+ * After every POS sync, find confirmed products whose stock changed
+ * and push the new stock to Shopify automatically.
+ *
+ * Also auto-activates draft products that received stock > 0.
+ */
+async function pushConfirmedStockChanges(products) {
+  // Build a barcode → new stock map from the incoming sync batch
+  const stockMap = new Map()
+  for (const p of products) {
+    const barcode = String(p.barcode || '').trim()
+    if (barcode) {
+      stockMap.set(barcode, {
+        stockMain:  Number(p.stockMain)  || 0,
+        stockStore: Number(p.stockStore) || 0,
+      })
+    }
+  }
+
+  // Load all confirmed PosMatches that have a Shopify variant linked
+  const confirmed = await db.posMatch.findMany({
+    where: { status: 'confirmed', shopifyVariantId: { not: null } },
+    include: {
+      posProduct: true,
+      variant: {
+        include: {
+          inventoryLevels: true,
+          product: { select: { id: true, status: true } },
+        },
+      },
+    },
+  })
+
+  let pushed = 0, activated = 0
+  for (const match of confirmed) {
+    if (!match.posProduct || !match.variant) continue
+
+    const newStock = stockMap.get(match.posProduct.barcode)
+    if (!newStock) continue  // not in this sync batch
+
+    const oldTotal = (match.posStockMain || 0) + (match.posStockStore || 0)
+    const newTotal = newStock.stockMain + newStock.stockStore
+
+    if (oldTotal === newTotal) continue  // no change — skip
+
+    console.log(`[POS SYNC PUSH] ${match.posProduct.barcode} stock ${oldTotal}→${newTotal}`)
+
+    try {
+      // Push new stock to all Shopify locations
+      for (const level of match.variant.inventoryLevels) {
+        await setInventoryLevel({
+          inventoryItemId: Number(match.variant.inventoryItemId),
+          locationId:      Number(level.locationId),
+          available:       newTotal,
+        })
+      }
+
+      // Refresh local variant snapshot
+      await db.variant.update({
+        where: { id: match.variant.id },
+        data:  { inventoryQuantity: newTotal },
+      })
+
+      // Update PosMatch snapshots
+      const matchUpdate = {
+        posStockMain:  newStock.stockMain,
+        posStockStore: newStock.stockStore,
+        shopifyStock:  newTotal,
+      }
+
+      // Auto-activate draft product when stock goes from 0 to > 0
+      if (newTotal > 0 && match.variant.product?.status === 'draft') {
+        try {
+          await updateProduct(match.variant.product.id, { status: 'active' })
+          await db.product.update({
+            where: { id: match.variant.product.id },
+            data:  { status: 'active' },
+          })
+          matchUpdate.shopifyStatus = 'active'
+          activated++
+          console.log(`[POS SYNC PUSH] Auto-activated ${match.variant.product.id}`)
+        } catch (ae) {
+          console.error(`[POS SYNC PUSH] Auto-activate failed:`, ae.message)
+        }
+      }
+
+      await db.posMatch.update({
+        where: { id: match.id },
+        data:  matchUpdate,
+      })
+
+      pushed++
+    } catch (e) {
+      console.error(`[POS SYNC PUSH] Failed for ${match.posProduct.barcode}:`, e.message)
+    }
+  }
+
+  if (pushed > 0 || activated > 0) {
+    console.log(`[POS SYNC PUSH] Done — ${pushed} stock updates pushed, ${activated} products activated`)
   }
 }
