@@ -46,11 +46,11 @@ async function handler(req, res) {
 
   if (search) {
     where.OR = [
-      { title:       { contains: search } },
-      { vendor:      { contains: search } },
-      { tags:        { contains: search } },
-      { variants: { some: { sku:     { contains: search } } } },
-      { variants: { some: { barcode: { contains: search } } } },
+      { title:       { contains: search, mode: 'insensitive' } },
+      { vendor:      { contains: search, mode: 'insensitive' } },
+      { tags:        { contains: search, mode: 'insensitive' } },
+      { variants: { some: { sku:     { contains: search, mode: 'insensitive' } } } },
+      { variants: { some: { barcode: { contains: search, mode: 'insensitive' } } } },
     ]
   }
 
