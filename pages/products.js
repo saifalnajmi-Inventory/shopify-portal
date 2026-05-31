@@ -10,7 +10,7 @@ import ProductTable from '../components/ProductTable'
 const DEFAULT_FILTERS = {
   search: '', status: '', vendor: '', productType: '',
   collectionId: '', stockLevel: '', hasSales: '', hasImages: '',
-  hasSeo: '', hasVendor: '',
+  hasSeo: '', hasVendor: '', posLink: '',
 }
 
 export default function ProductsPage() {
@@ -96,6 +96,29 @@ export default function ProductsPage() {
         options={filterOpts}
         onChange={f => { setFilters(f); setPage(1) }}
       />
+
+      {/* POS origin quick-filter chips */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-slate-400 text-xs font-medium uppercase tracking-wide">POS:</span>
+        {[
+          { value: '',          label: 'All',         cls: 'bg-slate-100 text-slate-600 hover:bg-slate-200' },
+          { value: 'confirmed', label: '🔗 Linked',   cls: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
+          { value: 'pending',   label: '⏳ Pending',  cls: 'bg-amber-50  text-amber-700  hover:bg-amber-100'  },
+          { value: 'none',      label: '— No POS',    cls: 'bg-slate-50  text-slate-500  hover:bg-slate-100'  },
+        ].map(chip => (
+          <button
+            key={chip.value}
+            onClick={() => { setFilters(f => ({ ...f, posLink: chip.value })); setPage(1) }}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${chip.cls} ${
+              filters.posLink === chip.value
+                ? 'ring-2 ring-offset-1 ring-indigo-400 border-transparent'
+                : 'border-transparent'
+            }`}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
 
       {/* Table */}
       {loading && !products.length ? (

@@ -10,6 +10,26 @@ const STATUS_BADGES = {
   archived: 'badge-gray',
 }
 
+const POS_BADGE_MAP = {
+  confirmed: { label: '🔗 POS',    cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  pending:   { label: '⏳ Pending', cls: 'bg-amber-50  text-amber-700  border border-amber-200'  },
+  rejected:  { label: '✕ Rejected', cls: 'bg-rose-50   text-rose-600   border border-rose-200'   },
+}
+
+function PosLinkBadge({ posLink }) {
+  if (!posLink) return <span className="text-slate-300 text-xs">—</span>
+  const badge = POS_BADGE_MAP[posLink.status]
+  if (!badge) return <span className="text-slate-300 text-xs">—</span>
+  return (
+    <span
+      className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${badge.cls}`}
+      title={posLink.posName ? `POS: ${posLink.posName}${posLink.posBarcode ? ` · ${posLink.posBarcode}` : ''}` : undefined}
+    >
+      {badge.label}
+    </span>
+  )
+}
+
 function ProductTitle({ title, sub }) {
   const [copied, setCopied] = useState(false)
 
@@ -169,6 +189,7 @@ export default function ProductTable({ products, onSort, sort, order, onRefresh 
             <SortHeader field="title">Product</SortHeader>
             <SortHeader field="vendor">Vendor</SortHeader>
             <SortHeader field="status">Status</SortHeader>
+            <th className="tbl th">POS</th>
             <th className="tbl th">Variants</th>
             <th className="tbl th">Stock</th>
             <th className="tbl th">Sold 30d</th>
@@ -241,6 +262,9 @@ export default function ProductTable({ products, onSort, sort, order, onRefresh 
                       <option value="archived">archived</option>
                     </select>
                   </td>
+
+                  {/* POS link status */}
+                  <td><PosLinkBadge posLink={p.posLink} /></td>
 
                   {/* Variants count */}
                   <td className="text-center text-sm">{p.variantCount}</td>

@@ -25,6 +25,7 @@ async function handler(req, res) {
     hasImages   = '',   // true | false
     hasSeo      = '',   // true | false
     hasVendor   = '',   // true | false
+    posLink     = '',   // 'confirmed' | 'pending' | 'none' | ''
     sort        = 'title',
     order       = 'asc',
     page        = '1',
@@ -100,6 +101,25 @@ async function handler(req, res) {
     where.variants = { some: variantWhere }
   }
 
+  // ── POS link filter ──────────────────────────────────────────────────────────
+  if (posLink === 'confirmed' || posLink === 'pending') {
+    const linkedVariants = await db.posMatch.findMany({
+      where: { status: posLink, shopifyVariantId: { not: null } },
+      select: { shopifyVariantId: true },
+    })
+    const ids = linkedVariants.map(m => m.shopifyVariantId).filter(Boolean)
+    where.variants = { some: { id: { in: ids } } }
+  } else if (posLink === 'none') {
+    const allLinked = await db.posMatch.findMany({
+      where: { shopifyVariantId: { not: null } },
+      select: { shopifyVariantId: true },
+    })
+    const ids = allLinked.map(m => m.shopifyVariantId).filter(Boolean)
+    if (ids.length > 0) {
+      where.NOT = { variants: { some: { id: { in: ids } } } }
+    }
+  }
+
   // ── Sort ─────────────────────────────────────────────────────────────────────
   const validSorts = { title: { title: order }, vendor: { vendor: order }, status: { status: order } }
   const orderBy = validSorts[sort] || { title: 'asc' }
@@ -123,6 +143,30 @@ async function handler(req, res) {
     db.product.count({ where }),
   ])
 
+  // ── Enrich with POS link status ──────────────────────────────────────────────
+  // Fetch PosMatch rows for all variants on this page (single query, no N+1)
+  const pageVariantIds = products.flatMap(p => p.variants.map(v => v.id))
+  const posMatchRows   = pageVariantIds.length > 0
+    ? await db.posMatch.findMany({
+        where:  { shopifyVariantId: { in: pageVariantIds } },
+        select: { shopifyVariantId: true, status: true, matchType: true,
+                  posStockMain: true, posStockStore: true,
+                  posProduct: { select: { name: true, barcode: true } } },
+      })
+    : []
+
+  // Map variantId → best PosMatch status (confirmed > pending > others)
+  const STATUS_RANK = { confirmed: 3, pending: 2, rejected: 1, unmatched: 0 }
+  const variantPosMap = new Map()
+  for (const m of posMatchRows) {
+    if (!m.shopifyVariantId) continue
+    const existing = variantPosMap.get(m.shopifyVariantId)
+    const rank = STATUS_RANK[m.status] ?? -1
+    if (!existing || rank > (STATUS_RANK[existing.status] ?? -1)) {
+      variantPosMap.set(m.shopifyVariantId, m)
+    }
+  }
+
   // ── Aggregate variant data per product ───────────────────────────────────────
   const enriched = products.map(p => {
     const variants = p.variants
@@ -136,6 +180,14 @@ async function handler(req, res) {
       .filter(v => v.firstOutOfStockAt)
       .sort((a, b) => new Date(a.firstOutOfStockAt) - new Date(b.firstOutOfStockAt))[0]
       ?.firstOutOfStockAt || null
+
+    // Find the best POS match for any variant of this product
+    const bestPosMatch = variants.reduce((best, v) => {
+      const m = variantPosMap.get(v.id)
+      if (!m) return best
+      if (!best) return m
+      return (STATUS_RANK[m.status] ?? -1) > (STATUS_RANK[best.status] ?? -1) ? m : best
+    }, null)
 
     return {
       id:             p.id,
@@ -153,6 +205,14 @@ async function handler(req, res) {
       publishedAt:    p.publishedAt,
       collections:    p.collections.map(pc => pc.collection),
       totalQty,
+      // POS link info — null means no POS connection at all
+      posLink: bestPosMatch ? {
+        status:    bestPosMatch.status,         // confirmed | pending | rejected
+        matchType: bestPosMatch.matchType,      // barcode | barcode_to_sku | sku | name_token | manual
+        posName:   bestPosMatch.posProduct?.name    || null,
+        posBarcode:bestPosMatch.posProduct?.barcode || null,
+        posStock:  (bestPosMatch.posStockMain || 0) + (bestPosMatch.posStockStore || 0),
+      } : null,
       totalSold,
       sold30Days,
       sold7Days,

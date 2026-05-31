@@ -32,7 +32,7 @@ export default function FilterPanel({ filters, options, onChange }) {
     onChange({
       search: '', status: '', vendor: '', productType: '',
       collectionId: '', stockLevel: '', hasSales: '', hasImages: '',
-      hasSeo: '', hasVendor: '',
+      hasSeo: '', hasVendor: '', posLink: '',
     })
     setCustomThreshold('')
   }
