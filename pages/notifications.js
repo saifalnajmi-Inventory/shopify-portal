@@ -363,21 +363,28 @@ export default function NotificationsPage() {
                     </span>
                   </div>
 
-                  {/* Product name */}
-                  {n.productName && (
-                    <div className="px-4 pb-1">
-                      <p className="text-xs font-semibold text-slate-700 truncate" title={n.productName}>
-                        {n.productName}
+                  {/* Product image + name + message */}
+                  <div className="px-4 pb-2 flex-1 flex gap-3 items-start">
+                    {n.firstImageSrc && (
+                      <img
+                        src={n.firstImageSrc}
+                        alt=""
+                        className="w-12 h-12 rounded-lg object-cover shrink-0 border border-slate-200 mt-0.5"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      {n.productName && (
+                        <div className="pb-1">
+                          <p className="text-[11px] font-semibold text-slate-700 truncate leading-snug" title={n.productName}>
+                            {n.productName}
+                          </p>
+                          {n.sku && <p className="text-[10px] text-slate-400 font-mono mt-0.5">SKU: {n.sku}</p>}
+                        </div>
+                      )}
+                      <p className={clsx('text-[11px] leading-snug', isUnread ? 'font-semibold text-slate-800' : 'text-slate-600')}>
+                        {n.message}
                       </p>
-                      {n.sku && <p className="text-[10px] text-slate-400 font-mono mt-0.5">SKU: {n.sku}</p>}
                     </div>
-                  )}
-
-                  {/* Message */}
-                  <div className="px-4 pb-2 flex-1">
-                    <p className={clsx('text-sm leading-snug', isUnread ? 'font-semibold text-slate-800' : 'text-slate-600')}>
-                      {n.message}
-                    </p>
                   </div>
 
                   {/* Stock change pill */}

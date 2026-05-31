@@ -28,7 +28,22 @@ async function handler(req, res) {
       db.notification.count({ where: { status: 'unread' } }),
     ])
 
-    return res.status(200).json({ notifications, unreadCount })
+    // Enrich with product image — batch fetch distinct productIds
+    const productIds = [...new Set(notifications.map(n => n.productId).filter(Boolean))]
+    let imageMap = {}
+    if (productIds.length) {
+      const products = await db.product.findMany({
+        where:  { id: { in: productIds } },
+        select: { id: true, firstImageSrc: true },
+      })
+      imageMap = Object.fromEntries(products.map(p => [p.id, p.firstImageSrc]))
+    }
+    const enriched = notifications.map(n => ({
+      ...n,
+      firstImageSrc: n.productId ? (imageMap[n.productId] || null) : null,
+    }))
+
+    return res.status(200).json({ notifications: enriched, unreadCount })
   }
 
   // ── CREATE ────────────────────────────────────────────────────────────────────
