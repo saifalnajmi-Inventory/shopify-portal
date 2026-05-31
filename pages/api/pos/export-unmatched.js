@@ -22,9 +22,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized — include x-sync-key header' })
   }
 
-  const limit  = Math.min(parseInt(req.query.limit)  || 20, 100)
-  const offset = Math.max(parseInt(req.query.offset) || 0,  0)
-  const q      = (req.query.q || '').trim()
+  const limit      = Math.min(parseInt(req.query.limit)  || 20, 100)
+  const offset     = Math.max(parseInt(req.query.offset) || 0,  0)
+  const q          = (req.query.q || '').trim()
+  const stockFirst = req.query.stockFirst === 'true'
 
   try {
     const where = {
@@ -50,7 +51,9 @@ export default async function handler(req, res) {
         where,
         skip:  offset,
         take:  limit,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: stockFirst
+          ? [{ posStockMain: 'desc' }, { posStockStore: 'desc' }]
+          : { updatedAt: 'desc' },
         include: {
           posProduct: {
             select: {
