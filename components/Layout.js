@@ -6,7 +6,7 @@ import {
   RefreshCw, Store, Menu, X, Bell, Zap, Settings,
   CheckCircle2, Clock, AlertCircle, Wifi, Users,
   LogOut, ShieldCheck, Shield, User, Eye, KeyRound, Crown,
-  ShoppingBag, Cable,
+  ShoppingBag, Cable, Warehouse,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -22,7 +22,8 @@ const NAV_ALL = [
   { href: '/change-log',    label: 'Change Log',     icon: History          },
   { href: '/notifications', label: 'Notifications',  icon: Bell, badgeKey: 'unread' },
   { href: '/restock-rules', label: 'Auto-Restock',   icon: Zap              },
-  { href: '/pos-sync',      label: 'POS Sync',       icon: Cable, posSyncOnly: true },
+  { href: '/pos-sync',      label: 'POS Sync',       icon: Cable,     posSyncOnly: true },
+  { href: '/inventory',     label: 'Inventory',      icon: Warehouse, posSyncOnly: true },
   { href: '/settings',      label: 'Settings',       icon: Settings         },
   { href: '/users',         label: 'Users',          icon: Users, adminOnly: true },
 ]
