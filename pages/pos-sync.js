@@ -719,72 +719,162 @@ export default function PosSyncPage() {
       {/* ── Duplicates Panel ─────────────────────────────────────────────────── */}
       {activeTab === 'duplicates' && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
-              <span className="font-semibold text-slate-800 text-sm">Duplicate Shopify Products</span>
+              <span className="font-bold text-slate-800 text-base">Duplicate Shopify Products</span>
               {duplicates && (
-                <span className="ml-2 text-xs text-slate-400">
-                  {duplicates.totalGroups} groups · {duplicates.wasted} extra copies to delete
-                </span>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-xs text-slate-500">{duplicates.totalGroups} duplicate groups</span>
+                  <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                    🗑 {duplicates.wasted} products to delete
+                  </span>
+                </div>
               )}
             </div>
-            <button onClick={loadDuplicates} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
+            <button onClick={loadDuplicates} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
               <RefreshCw size={11} /> Refresh
             </button>
           </div>
 
+          {/* Legend */}
+          {!dupLoading && duplicates?.totalGroups > 0 && (
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-4 text-[11px] text-slate-500">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-400" />
+                <span><strong>✓ Keep</strong> — recommended to keep (has POS link / sales / active)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm bg-rose-200 border border-rose-400" />
+                <span><strong>🗑 Delete</strong> — open in Shopify → More actions → Delete product</span>
+              </div>
+            </div>
+          )}
+
           {dupLoading ? (
-            <div className="p-8 text-center text-xs text-slate-400">Scanning for duplicates…</div>
+            <div className="p-8 text-center text-xs text-slate-400">
+              <RefreshCw size={20} className="animate-spin mx-auto mb-2 text-slate-300" />
+              Scanning for duplicates…
+            </div>
           ) : !duplicates || duplicates.totalGroups === 0 ? (
             <div className="p-8 text-center">
-              <div className="text-2xl mb-2">✅</div>
+              <div className="text-3xl mb-2">✅</div>
               <div className="text-sm font-semibold text-slate-700">No duplicates found</div>
               <div className="text-xs text-slate-400 mt-1">All Shopify product titles are unique</div>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
               {duplicates.groups.map((group, gi) => (
-                <div key={gi} className="p-4">
+                <div key={gi} className="p-5">
+                  {/* Group header */}
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-[10px] font-bold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
-                      {group.count}× duplicate
+                    <span className="text-[10px] font-bold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full border border-violet-200">
+                      {group.count}× copies
                     </span>
-                    <span className="text-sm font-semibold text-slate-800 truncate">{group.title}</span>
+                    <span className="text-sm font-semibold text-slate-800 truncate flex-1" title={group.title}>
+                      {group.title}
+                    </span>
+                    <span className="text-[10px] text-rose-500 font-semibold shrink-0">
+                      {group.count - 1} to delete
+                    </span>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {group.products.map((p, pi) => (
-                      <div key={p.id} className={`flex items-center gap-3 p-3 rounded-xl border ${
-                        pi === 0 ? 'border-emerald-200 bg-emerald-50/50' : 'border-rose-200 bg-rose-50/50'
-                      }`}>
-                        {p.firstImageSrc ? (
-                          <img src={p.firstImageSrc} alt="" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-slate-400 text-xs">?</div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                              p.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                            }`}>{p.status}</span>
-                            {pi === 0 && <span className="text-[9px] font-bold text-emerald-600">← keep</span>}
-                            {pi > 0  && <span className="text-[9px] font-bold text-rose-500">← delete</span>}
+
+                  {/* Product cards */}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {group.products.map((p, pi) => {
+                      const isKeep = pi === 0
+                      return (
+                        <div key={p.id} className={`rounded-xl border-2 p-3 relative ${
+                          isKeep
+                            ? 'border-emerald-300 bg-emerald-50/60'
+                            : 'border-rose-300 bg-rose-50/50'
+                        }`}>
+                          {/* Keep / Delete banner */}
+                          <div className={`absolute -top-2.5 left-3 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            isKeep
+                              ? 'bg-emerald-500 text-white border-emerald-500'
+                              : 'bg-rose-500 text-white border-rose-500'
+                          }`}>
+                            {isKeep ? '✓ KEEP' : '🗑 DELETE'}
                           </div>
-                          <div className="text-xs text-slate-500 font-mono">ID: {p.id}</div>
-                          {p.variant?.sku && <div className="text-[10px] text-slate-400">SKU: {p.variant.sku}</div>}
+
+                          <div className="flex items-start gap-3 mt-1">
+                            {/* Image */}
+                            {p.firstImageSrc ? (
+                              <img src={p.firstImageSrc} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-slate-400 text-xs">?</div>
+                            )}
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0 space-y-1">
+                              {/* Status + reason */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                  p.status === 'active'   ? 'bg-emerald-100 text-emerald-700' :
+                                  p.status === 'draft'    ? 'bg-slate-100   text-slate-500'   :
+                                                            'bg-rose-100    text-rose-600'
+                                }`}>{p.status}</span>
+                                {/* POS status */}
+                                {p.posStatus === 'confirmed' && (
+                                  <span className="text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded">🔗 POS linked</span>
+                                )}
+                                {p.posStatus === 'pending' && (
+                                  <span className="text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">⏳ POS pending</span>
+                                )}
+                              </div>
+
+                              {/* Why keep / why delete */}
+                              <div className={`text-[10px] font-semibold ${isKeep ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                {isKeep ? `✓ ${p.keepReason}` : ''}
+                              </div>
+
+                              {/* Stats row */}
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                <span title="Total stock">📦 {p.totalQty ?? 0}</span>
+                                <span title="Total sold">📈 {p.totalSold ?? 0} sold</span>
+                                {p.sold30Days > 0 && <span className="text-indigo-500 font-semibold">{p.sold30Days} / 30d</span>}
+                              </div>
+
+                              {/* SKU + ID */}
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {p.firstVariant?.sku && <span>SKU: {p.firstVariant.sku} · </span>}
+                                ID: {p.id}
+                              </div>
+
+                              {/* Created date */}
+                              <div className="text-[10px] text-slate-400">
+                                Created: {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '—'}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action button */}
+                          <div className="mt-3 flex justify-end">
+                            <a
+                              href={p.shopifyUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={`text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${
+                                isKeep
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-rose-500 text-white border border-rose-500 hover:bg-rose-600'
+                              }`}
+                            >
+                              {isKeep ? 'View in Shopify ↗' : '🗑 Open to delete ↗'}
+                            </a>
+                          </div>
                         </div>
-                        <a
-                          href={`https://admin.shopify.com/store/e608ce-82/products/${p.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 shrink-0 flex items-center gap-0.5"
-                        >
-                          Open ↗
-                        </a>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
-                  <div className="mt-2 text-[10px] text-slate-400">
-                    → Open the <strong>← delete</strong> product in Shopify and delete it, then run <strong>Sync now</strong> to refresh.
+
+                  {/* How-to tip */}
+                  <div className="mt-3 text-[10px] text-slate-400 bg-slate-50 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                    <span className="shrink-0 mt-0.5">💡</span>
+                    <span>
+                      To delete: click <strong>🗑 Open to delete ↗</strong> → in Shopify click <strong>More actions → Delete product</strong>.
+                      Then click <strong>Refresh</strong> above.
+                    </span>
                   </div>
                 </div>
               ))}
