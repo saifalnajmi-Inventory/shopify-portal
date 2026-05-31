@@ -32,16 +32,18 @@ function ago(d) {
 }
 
 const STATUS_TABS = [
-  { key: 'all',       label: 'All',       color: 'slate'   },
-  { key: 'pending',   label: 'Pending',   color: 'indigo'  },
-  { key: 'confirmed', label: 'Confirmed', color: 'emerald' },
-  { key: 'unmatched', label: 'Unmatched', color: 'amber'   },
-  { key: 'rejected',  label: 'Rejected',  color: 'rose'    },
+  { key: 'all',        label: 'All',        color: 'slate'  },
+  { key: 'pending',    label: 'Pending',    color: 'indigo' },
+  { key: 'confirmed',  label: 'Confirmed',  color: 'emerald'},
+  { key: 'unmatched',  label: 'Unmatched',  color: 'amber'  },
+  { key: 'rejected',   label: 'Rejected',   color: 'rose'   },
+  { key: 'duplicates', label: 'Duplicates', color: 'violet' },
 ]
 
 const TAB_COLORS = {
   slate:   { active: 'bg-slate-800 text-white',   dot: '' },
   indigo:  { active: 'bg-indigo-600 text-white',  dot: 'bg-indigo-400' },
+  violet:  { active: 'bg-violet-600 text-white',  dot: 'bg-violet-400' },
   emerald: { active: 'bg-emerald-600 text-white', dot: 'bg-emerald-400' },
   amber:   { active: 'bg-amber-500 text-white',   dot: 'bg-amber-400' },
   rose:    { active: 'bg-rose-500 text-white',     dot: 'bg-rose-400' },
@@ -433,6 +435,8 @@ export default function PosSyncPage() {
   const [selectedIds,   setSelectedIds]   = useState(new Set())
   const [linkRow,       setLinkRow]       = useState(null)
   const [stockFilter,   setStockFilter]   = useState('all')
+  const [duplicates,    setDuplicates]    = useState(null)
+  const [dupLoading,    setDupLoading]    = useState(false)
   const [autoActivate,  setAutoActivate]  = useState(() => {
     if (typeof window === 'undefined') return true
     const stored = localStorage.getItem('pos_auto_activate')
@@ -484,8 +488,19 @@ export default function PosSyncPage() {
     setTableLoading(false)
   }, [activeTab, stockFilter, page, debouncedQ])
 
+  // Load duplicates
+  const loadDuplicates = useCallback(async () => {
+    setDupLoading(true)
+    try {
+      const r = await fetch('/api/pos/duplicates')
+      if (r.ok) setDuplicates(await r.json())
+    } catch { /* ignore */ }
+    setDupLoading(false)
+  }, [])
+
   useEffect(() => { loadStats() }, [loadStats])
   useEffect(() => { loadTable() }, [loadTable])
+  useEffect(() => { if (activeTab === 'duplicates') loadDuplicates() }, [activeTab, loadDuplicates])
 
   function switchTab(key) { setActiveTab(key); setPage(1); setSelectedIds(new Set()) }
   function switchStock(key) { setStockFilter(key); setPage(1); setSelectedIds(new Set()) }
@@ -624,10 +639,15 @@ export default function PosSyncPage() {
                 isActive ? c.active : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
               }`}
             >
-              {!isActive && tab.color !== 'slate' && (
+              {!isActive && tab.color !== 'slate' && tab.key !== 'duplicates' && (
                 <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
               )}
               {tab.label}
+              {tab.key === 'duplicates' && duplicates?.totalGroups > 0 && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20' : 'bg-violet-100 text-violet-700'}`}>
+                  {duplicates.totalGroups}
+                </span>
+              )}
             </button>
           )
         })}
@@ -696,8 +716,85 @@ export default function PosSyncPage() {
         </div>
       </div>
 
-      {/* ── Table ───────────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      {/* ── Duplicates Panel ─────────────────────────────────────────────────── */}
+      {activeTab === 'duplicates' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <span className="font-semibold text-slate-800 text-sm">Duplicate Shopify Products</span>
+              {duplicates && (
+                <span className="ml-2 text-xs text-slate-400">
+                  {duplicates.totalGroups} groups · {duplicates.wasted} extra copies to delete
+                </span>
+              )}
+            </div>
+            <button onClick={loadDuplicates} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
+              <RefreshCw size={11} /> Refresh
+            </button>
+          </div>
+
+          {dupLoading ? (
+            <div className="p-8 text-center text-xs text-slate-400">Scanning for duplicates…</div>
+          ) : !duplicates || duplicates.totalGroups === 0 ? (
+            <div className="p-8 text-center">
+              <div className="text-2xl mb-2">✅</div>
+              <div className="text-sm font-semibold text-slate-700">No duplicates found</div>
+              <div className="text-xs text-slate-400 mt-1">All Shopify product titles are unique</div>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {duplicates.groups.map((group, gi) => (
+                <div key={gi} className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[10px] font-bold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
+                      {group.count}× duplicate
+                    </span>
+                    <span className="text-sm font-semibold text-slate-800 truncate">{group.title}</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {group.products.map((p, pi) => (
+                      <div key={p.id} className={`flex items-center gap-3 p-3 rounded-xl border ${
+                        pi === 0 ? 'border-emerald-200 bg-emerald-50/50' : 'border-rose-200 bg-rose-50/50'
+                      }`}>
+                        {p.firstImageSrc ? (
+                          <img src={p.firstImageSrc} alt="" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-slate-400 text-xs">?</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                              p.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                            }`}>{p.status}</span>
+                            {pi === 0 && <span className="text-[9px] font-bold text-emerald-600">← keep</span>}
+                            {pi > 0  && <span className="text-[9px] font-bold text-rose-500">← delete</span>}
+                          </div>
+                          <div className="text-xs text-slate-500 font-mono">ID: {p.id}</div>
+                          {p.variant?.sku && <div className="text-[10px] text-slate-400">SKU: {p.variant.sku}</div>}
+                        </div>
+                        <a
+                          href={`https://admin.shopify.com/store/e608ce-82/products/${p.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 shrink-0 flex items-center gap-0.5"
+                        >
+                          Open ↗
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 text-[10px] text-slate-400">
+                    → Open the <strong>← delete</strong> product in Shopify and delete it, then run <strong>Sync now</strong> to refresh.
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Table (hidden on duplicates tab) ─────────────────────────────────── */}
+      <div className={`bg-white rounded-2xl border border-slate-200 overflow-hidden ${activeTab === 'duplicates' ? 'hidden' : ''}`}>
 
         {/* Agent not connected notice */}
         {!agentConnected && !statsLoading && (
