@@ -12,7 +12,7 @@
  */
 
 import db from '../../../lib/db'
-import { updateVariant, setInventoryLevel, updateProduct } from '../../../lib/shopify'
+import { updateVariant, setInventoryLevel, adjustInventoryLevel, updateProduct } from '../../../lib/shopify'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -144,8 +144,20 @@ export default async function handler(req, res) {
 }
 
 /**
- * After every POS sync, find confirmed products whose stock changed
- * and push the new stock to Shopify automatically.
+ * After every POS sync, find confirmed products whose POS stock changed
+ * and apply the DELTA to Shopify inventory.
+ *
+ * WHY DELTA AND NOT OVERWRITE:
+ *   Portal cannot write to the POS system. Shopify is the source of truth
+ *   for online inventory. When POS reports "stock went from 10 → 8", it means
+ *   2 units were sold in the physical store. We apply -2 to Shopify so that
+ *   any online Shopify orders that already decremented inventory are preserved.
+ *
+ *   Example:
+ *     POS: 10 → 8  (delta = -2, 2 sold in store)
+ *     Shopify had 2 online orders → Shopify stock = 8
+ *     Delta approach: Shopify 8 + (-2) = 6  ✅  (correctly reflects 4 total sold)
+ *     Overwrite approach: set Shopify to 8   ❌  (loses the 2 online order decrements)
  *
  * Also auto-activates draft products that received stock > 0.
  */
@@ -183,38 +195,43 @@ async function pushConfirmedStockChanges(products) {
     const newStock = stockMap.get(match.posProduct.barcode)
     if (!newStock) continue  // not in this sync batch
 
-    const oldTotal = (match.posStockMain || 0) + (match.posStockStore || 0)
-    const newTotal = newStock.stockMain + newStock.stockStore
+    const oldPosTotal = (match.posStockMain || 0) + (match.posStockStore || 0)
+    const newPosTotal = newStock.stockMain + newStock.stockStore
 
-    if (oldTotal === newTotal) continue  // no change — skip
+    // Calculate how many units were physically sold/added in the store since last sync
+    const posDelta = newPosTotal - oldPosTotal
 
-    console.log(`[POS SYNC PUSH] ${match.posProduct.barcode} stock ${oldTotal}→${newTotal}`)
+    if (posDelta === 0) continue  // no physical stock change — skip
+
+    console.log(`[POS SYNC PUSH] ${match.posProduct.barcode} POS ${oldPosTotal}→${newPosTotal} (delta ${posDelta >= 0 ? '+' : ''}${posDelta})`)
 
     try {
-      // Push new stock to all Shopify locations
+      // Apply the POS delta RELATIVELY to each Shopify location.
+      // This preserves any online Shopify order decrements that already happened.
       for (const level of match.variant.inventoryLevels) {
-        await setInventoryLevel({
+        await adjustInventoryLevel({
           inventoryItemId: Number(match.variant.inventoryItemId),
           locationId:      Number(level.locationId),
-          available:       newTotal,
+          adjustment:      posDelta,
         })
       }
 
-      // Refresh local variant snapshot
+      // Update our local variant snapshot (estimated — actual Shopify stock may differ due to online orders)
+      const estimatedShopifyStock = Math.max(0, (match.shopifyStock ?? 0) + posDelta)
       await db.variant.update({
         where: { id: match.variant.id },
-        data:  { inventoryQuantity: newTotal },
+        data:  { inventoryQuantity: estimatedShopifyStock },
       })
 
       // Update PosMatch snapshots
       const matchUpdate = {
         posStockMain:  newStock.stockMain,
         posStockStore: newStock.stockStore,
-        shopifyStock:  newTotal,
+        shopifyStock:  estimatedShopifyStock,
       }
 
-      // Auto-activate draft product when stock goes from 0 to > 0
-      if (newTotal > 0 && match.variant.product?.status === 'draft') {
+      // Auto-activate draft product when POS stock goes from 0 to > 0
+      if (newPosTotal > 0 && oldPosTotal === 0 && match.variant.product?.status === 'draft') {
         try {
           await updateProduct(match.variant.product.id, { status: 'active' })
           await db.product.update({
@@ -241,6 +258,6 @@ async function pushConfirmedStockChanges(products) {
   }
 
   if (pushed > 0 || activated > 0) {
-    console.log(`[POS SYNC PUSH] Done — ${pushed} stock updates pushed, ${activated} products activated`)
+    console.log(`[POS SYNC PUSH] Done — ${pushed} delta adjustments pushed, ${activated} products activated`)
   }
 }
