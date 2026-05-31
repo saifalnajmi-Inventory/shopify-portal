@@ -5,22 +5,134 @@
  * Body: { posMatchId, shopifyVariantId }
  *
  * Steps:
- *   1. Update PosMatch: shopifyVariantId, matchType='manual', status='confirmed'
- *   2. Push POS barcode → Shopify variant barcode
- *   3. Push POS total stock → Shopify inventory at all locations
- *   4. Refresh local snapshots
+ *   1. Resolve Shopify variant — from local DB first; if missing (e.g. recently
+ *      pushed product not yet synced) fetch from Shopify API and mini-upsert.
+ *   2. Update PosMatch: shopifyVariantId, matchType='manual', status='confirmed'
+ *   3. Push POS barcode → Shopify variant barcode
+ *   4. Push POS total stock → Shopify inventory at all locations
+ *   5. Refresh local snapshots
  *
  * Auth: manage_settings
  */
 
 import db           from '../../../lib/db'
 import { withAuth } from '../../../lib/auth'
-import { updateVariant, setInventoryLevel, updateProduct } from '../../../lib/shopify'
+import {
+  updateVariant, setInventoryLevel, updateProduct,
+  fetchVariantById, fetchProductById,
+} from '../../../lib/shopify'
+
+// ── Mini-sync: fetch a Shopify variant + its product + inventory levels
+//    and upsert them into the local DB so manual-link logic can run normally. ──
+async function resolveVariant(shopifyVariantId) {
+  // 1. Try local DB
+  const cached = await db.variant.findUnique({
+    where:   { id: String(shopifyVariantId) },
+    include: {
+      product:         { select: { id: true, title: true, status: true, firstImageSrc: true } },
+      inventoryLevels: true,
+    },
+  })
+  if (cached) return cached
+
+  // 2. Not in DB — fetch live from Shopify and upsert so future calls are fast
+  console.log(`[MANUAL LINK] Variant ${shopifyVariantId} not in DB — fetching from Shopify live`)
+
+  const shopifyVariant = await fetchVariantById(shopifyVariantId)
+  if (!shopifyVariant) return null
+
+  const shopifyProduct = await fetchProductById(shopifyVariant.product_id)
+  if (!shopifyProduct) return null
+
+  // Upsert product
+  await db.product.upsert({
+    where:  { id: String(shopifyProduct.id) },
+    create: {
+      id:               String(shopifyProduct.id),
+      title:            shopifyProduct.title,
+      handle:           shopifyProduct.handle || '',
+      status:           shopifyProduct.status || 'draft',
+      vendor:           shopifyProduct.vendor || null,
+      productType:      shopifyProduct.product_type || null,
+      firstImageSrc:    shopifyProduct.images?.[0]?.src || null,
+      createdAtShopify: new Date(),
+      updatedAtShopify: new Date(),
+    },
+    update: {
+      title:            shopifyProduct.title,
+      status:           shopifyProduct.status || 'draft',
+      firstImageSrc:    shopifyProduct.images?.[0]?.src || null,
+      updatedAtShopify: new Date(),
+    },
+  })
+
+  // Upsert variant
+  await db.variant.upsert({
+    where:  { id: String(shopifyVariant.id) },
+    create: {
+      id:                String(shopifyVariant.id),
+      productId:         String(shopifyProduct.id),
+      title:             shopifyVariant.title || 'Default Title',
+      sku:               shopifyVariant.sku    || null,
+      barcode:           shopifyVariant.barcode || null,
+      price:             parseFloat(shopifyVariant.price)   || 0,
+      compareAtPrice:    parseFloat(shopifyVariant.compare_at_price) || null,
+      inventoryItemId:   String(shopifyVariant.inventory_item_id),
+      inventoryQuantity: shopifyVariant.inventory_quantity || 0,
+    },
+    update: {
+      title:             shopifyVariant.title || 'Default Title',
+      sku:               shopifyVariant.sku    || null,
+      price:             parseFloat(shopifyVariant.price)   || 0,
+      inventoryItemId:   String(shopifyVariant.inventory_item_id),
+      inventoryQuantity: shopifyVariant.inventory_quantity || 0,
+    },
+  })
+
+  // Fetch + upsert inventory levels so stock push works
+  const { default: fetch } = await import('node-fetch')
+  const domain = process.env.SHOPIFY_STORE_DOMAIN
+  const token  = process.env.SHOPIFY_ACCESS_TOKEN
+  const invRes = await fetch(
+    `https://${domain}/admin/api/2024-04/inventory_levels.json?inventory_item_ids=${shopifyVariant.inventory_item_id}&limit=250`,
+    { headers: { 'X-Shopify-Access-Token': token } }
+  )
+  const invData    = await invRes.json()
+  const invLevels  = invData.inventory_levels || []
+
+  for (const level of invLevels) {
+    await db.inventoryLevel.upsert({
+      where:  { variantId_locationId: { variantId: String(shopifyVariant.id), locationId: String(level.location_id) } },
+      create: { variantId: String(shopifyVariant.id), locationId: String(level.location_id), available: level.available || 0 },
+      update: { available: level.available || 0 },
+    })
+  }
+
+  console.log(`[MANUAL LINK] Mini-synced variant ${shopifyVariant.id} (${shopifyProduct.title}) with ${invLevels.length} inventory level(s)`)
+
+  // Return in the same shape that the rest of the handler expects
+  return {
+    id:               String(shopifyVariant.id),
+    sku:              shopifyVariant.sku    || null,
+    barcode:          shopifyVariant.barcode || null,
+    price:            parseFloat(shopifyVariant.price)   || 0,
+    inventoryItemId:  String(shopifyVariant.inventory_item_id),
+    inventoryLevels:  invLevels.map(l => ({ locationId: String(l.location_id), available: l.available })),
+    product: {
+      id:            String(shopifyProduct.id),
+      title:         shopifyProduct.title,
+      status:        shopifyProduct.status || 'draft',
+      firstImageSrc: shopifyProduct.images?.[0]?.src || null,
+    },
+  }
+}
+
+// ── Main handler ──────────────────────────────────────────────────────────────
 
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const user                                          = req.user
+  const user                                           = req.user
   const { posMatchId, shopifyVariantId, autoActivate } = req.body
 
   if (!posMatchId || !shopifyVariantId)
@@ -34,15 +146,9 @@ async function handler(req, res) {
     })
     if (!posMatch) return res.status(404).json({ error: 'Match not found' })
 
-    // Load target Shopify variant
-    const variant = await db.variant.findUnique({
-      where:   { id: shopifyVariantId },
-      include: {
-        product:         { select: { title: true, status: true, firstImageSrc: true } },
-        inventoryLevels: true,
-      },
-    })
-    if (!variant) return res.status(404).json({ error: 'Shopify variant not found' })
+    // Resolve Shopify variant (DB first, live Shopify API as fallback)
+    const variant = await resolveVariant(shopifyVariantId)
+    if (!variant) return res.status(404).json({ error: 'Shopify variant not found in DB or live Shopify API' })
 
     const pos   = posMatch.posProduct
     const total = pos.stockMain + pos.stockStore
@@ -51,7 +157,7 @@ async function handler(req, res) {
     const updated = await db.posMatch.update({
       where: { id: posMatchId },
       data: {
-        shopifyVariantId,
+        shopifyVariantId: String(shopifyVariantId),
         matchType:   'manual',
         status:      'confirmed',
         confirmedBy: user.username,
@@ -63,9 +169,9 @@ async function handler(req, res) {
       },
     })
 
-    // 2. Push barcode to Shopify (async — errors logged)
+    // 2. Push barcode to Shopify
     try {
-      await updateVariant(shopifyVariantId, { barcode: pos.barcode })
+      await updateVariant(String(shopifyVariantId), { barcode: pos.barcode })
     } catch (e) {
       console.error('[MANUAL LINK] barcode push failed:', e.message)
     }
@@ -85,10 +191,14 @@ async function handler(req, res) {
     }
 
     // 4. Refresh local Variant barcode + stock
-    await db.variant.update({
-      where: { id: shopifyVariantId },
-      data:  { barcode: pos.barcode, inventoryQuantity: total },
-    })
+    try {
+      await db.variant.update({
+        where: { id: String(shopifyVariantId) },
+        data:  { barcode: pos.barcode, inventoryQuantity: total },
+      })
+    } catch (e) {
+      console.error('[MANUAL LINK] local variant refresh failed:', e.message)
+    }
 
     // 5. Auto-activate draft product if stock > 0 and toggle is on
     let activated = false
@@ -107,11 +217,11 @@ async function handler(req, res) {
     console.log(`[MANUAL LINK] POS ${pos.barcode} → Variant ${shopifyVariantId} (${variant.product?.title}), stock=${total}${activated ? ', activated' : ''}`)
 
     return res.json({
-      ok:         true,
-      match:      updated,
+      ok:          true,
+      match:       updated,
       stockPushed: total,
       activated,
-      pushErrors: pushErrors.length ? pushErrors : undefined,
+      pushErrors:  pushErrors.length ? pushErrors : undefined,
     })
   } catch (err) {
     console.error('[MANUAL LINK]', err)

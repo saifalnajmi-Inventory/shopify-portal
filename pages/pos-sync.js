@@ -113,21 +113,23 @@ function MarginCell({ cost, shopifyPrice }) {
 
 // ── Manual Link Modal ─────────────────────────────────────────────────────────
 function LinkModal({ row, onClose, onLinked, autoActivate }) {
-  const [q,        setQ]        = useState('')
-  const [results,  setResults]  = useState([])
-  const [loading,  setLoading]  = useState(false)
-  const [linking,  setLinking]  = useState(null)  // variantId being linked
+  const [q,          setQ]          = useState('')
+  const [results,    setResults]    = useState([])
+  const [liveSource, setLiveSource] = useState(false)  // true when results are from live Shopify API
+  const [loading,    setLoading]    = useState(false)
+  const [linking,    setLinking]    = useState(null)    // variantId being linked
   const timer = useRef(null)
 
   useEffect(() => {
     clearTimeout(timer.current)
-    if (!q.trim() || q.trim().length < 2) { setResults([]); return }
+    if (!q.trim() || q.trim().length < 2) { setResults([]); setLiveSource(false); return }
     setLoading(true)
     timer.current = setTimeout(async () => {
       try {
         const r = await fetch(`/api/pos/search-variants?q=${encodeURIComponent(q.trim())}`)
         const d = await r.json()
         setResults(d.variants || [])
+        setLiveSource(d.source === 'shopify_live')
       } catch {}
       setLoading(false)
     }, 350)
@@ -183,6 +185,12 @@ function LinkModal({ row, onClose, onLinked, autoActivate }) {
         </div>
 
         {/* Results */}
+        {liveSource && results.length > 0 && (
+          <div className="flex items-center gap-1.5 px-1">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-[10px] text-amber-600 font-semibold">Live Shopify search — product not in local DB yet</span>
+          </div>
+        )}
         <div className="space-y-2 max-h-72 overflow-y-auto">
           {loading ? (
             <p className="text-xs text-slate-400 text-center py-4">Searching…</p>
@@ -207,6 +215,7 @@ function LinkModal({ row, onClose, onLinked, autoActivate }) {
                   <span className={`text-[10px] font-bold ${v.product?.status === 'active' ? 'text-emerald-500' : 'text-slate-400'}`}>
                     {v.product?.status}
                   </span>
+                  {v._fromLive && <span className="text-[9px] font-bold text-amber-500 bg-amber-50 px-1 py-0.5 rounded">⚡ live</span>}
                 </div>
               </div>
               <button
