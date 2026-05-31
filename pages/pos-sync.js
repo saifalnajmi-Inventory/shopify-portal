@@ -293,7 +293,7 @@ function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelec
 
       {/* Stock diff */}
       <td className="px-4 py-3 text-center">
-        <StockDiff pos={pos.stockMain + pos.stockStore} shopify={row.shopifyStock} />
+        <StockDiff pos={pos.stockMain + pos.stockStore} shopify={row.variant?.inventoryQuantity ?? row.shopifyStock} />
       </td>
 
       {/* Shopify product */}
@@ -332,16 +332,16 @@ function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelec
 
       {/* Shopify stock */}
       <td className="px-4 py-3 text-center">
-        {row.shopifyStock != null
-          ? <span className="text-sm font-bold text-slate-700">{fmt(row.shopifyStock)}</span>
+        {(row.variant?.inventoryQuantity ?? row.shopifyStock) != null
+          ? <span className="text-sm font-bold text-slate-700">{fmt(row.variant?.inventoryQuantity ?? row.shopifyStock)}</span>
           : <span className="text-slate-300 text-sm">—</span>
         }
       </td>
 
       {/* Shopify price */}
       <td className="px-4 py-3 text-center">
-        {row.shopifyPrice != null
-          ? <span className="text-sm font-semibold text-slate-700">{fmtPrice(row.shopifyPrice)}</span>
+        {(row.variant?.price ?? row.shopifyPrice) != null
+          ? <span className="text-sm font-semibold text-slate-700">{fmtPrice(row.variant?.price ?? row.shopifyPrice)}</span>
           : <span className="text-slate-300 text-sm">—</span>
         }
       </td>
@@ -349,7 +349,7 @@ function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelec
       {/* Margin — super_admin only */}
       {showCostAndMargin && (
         <td className="px-4 py-3 text-center">
-          <MarginCell cost={pos.costPrice} shopifyPrice={row.shopifyPrice} />
+          <MarginCell cost={pos.costPrice} shopifyPrice={row.variant?.price ?? row.shopifyPrice} />
         </td>
       )}
 
