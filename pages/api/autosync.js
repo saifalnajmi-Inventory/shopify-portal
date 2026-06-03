@@ -64,21 +64,16 @@ async function handler(req, res) {
   const isStale      = !lastSyncAt || lastSyncAt < staleAfter
   const needsSync    = isEmpty || isStale
 
-  // One-time setup per server lifetime
+  // One-time setup per server lifetime.
+  // NOTE: the real recurring scheduler now lives in instrumentation.js
+  // (runs on every server boot, survives deploys). This block is kept as
+  // a fallback for local dev where instrumentation.js may not fire.
   if (!scheduled) {
     scheduled = true
-
     if (needsSync) {
-      // Kick off immediately (500ms delay so the server is fully warmed up)
       setTimeout(() => runBackgroundSync(baseUrl), 500)
+      console.log(`[autosync] fallback — immediate sync triggered (${isEmpty ? 'empty DB' : 'stale data'})`)
     }
-
-    // Schedule recurring sync every AUTO_SYNC_HOURS regardless
-    setInterval(() => runBackgroundSync(baseUrl), SYNC_INTERVAL_MS)
-    console.log(
-      `[autosync] scheduler set up — interval: ${AUTO_SYNC_HOURS}h` +
-      (needsSync ? ` · immediate sync triggered (${isEmpty ? 'empty DB' : 'stale data'})` : ' · data is fresh')
-    )
   }
 
   return res.status(200).json({
