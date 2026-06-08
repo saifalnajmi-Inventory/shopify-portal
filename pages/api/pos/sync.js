@@ -193,6 +193,40 @@ async function pushConfirmedStockChanges(products) {
     if (!match.posProduct || !match.variant) continue
 
     const newStock = stockMap.get(match.posProduct.barcode)
+
+    // ── Force locks — applied every sync regardless of POS delta ─────────────
+    // forceDraft: keep Shopify product draft + inventory 0, even when POS has stock
+    // forceZero:  keep Shopify inventory 0, even when POS has stock (status unchanged)
+    if (match.forceDraft || match.forceZero) {
+      try {
+        if (match.forceDraft && match.variant.product?.status !== 'draft') {
+          await updateProduct(match.variant.product.id, { status: 'draft' })
+          await db.product.update({ where: { id: match.variant.product.id }, data: { status: 'draft' } })
+        }
+        for (const level of match.variant.inventoryLevels) {
+          await setInventoryLevel({
+            inventoryItemId: Number(match.variant.inventoryItemId),
+            locationId:      Number(level.locationId),
+            available:       0,
+          })
+        }
+        await db.variant.update({ where: { id: match.variant.id }, data: { inventoryQuantity: 0 } })
+        await db.posMatch.update({
+          where: { id: match.id },
+          data: {
+            ...(newStock ? { posStockMain: newStock.stockMain, posStockStore: newStock.stockStore } : {}),
+            shopifyStock:  0,
+            ...(match.forceDraft ? { shopifyStatus: 'draft' } : {}),
+          },
+        })
+        pushed++
+        console.log(`[POS SYNC PUSH] 🔒 Force-${match.forceDraft ? 'draft' : 'zero'} re-applied for ${match.posProduct.barcode}`)
+      } catch (e) {
+        console.error(`[POS SYNC PUSH] Force lock failed for ${match.posProduct.barcode}:`, e.message)
+      }
+      continue  // skip normal delta logic
+    }
+
     if (!newStock) continue  // not in this sync batch
 
     const oldPosTotal = (match.posStockMain || 0) + (match.posStockStore || 0)

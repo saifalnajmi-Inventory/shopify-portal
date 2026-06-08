@@ -3,7 +3,7 @@
  * inline editing that creates draft changes, and CSV export.
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Download, RefreshCw } from 'lucide-react'
+import { Download, RefreshCw, DownloadCloud } from 'lucide-react'
 import FilterPanel  from '../components/FilterPanel'
 import ProductTable from '../components/ProductTable'
 
@@ -23,6 +23,8 @@ export default function ProductsPage() {
   const [filters,    setFilters]    = useState(DEFAULT_FILTERS)
   const [filterOpts, setFilterOpts] = useState({ vendors: [], productTypes: [], collections: [] })
   const [loading,    setLoading]    = useState(true)
+  const [fetchingNew, setFetchingNew] = useState(false)
+  const [fetchMsg,    setFetchMsg]    = useState('')
 
   const debounceRef = useRef(null)
 
@@ -68,6 +70,33 @@ export default function ProductsPage() {
     window.open(`/api/export?${params}`, '_blank')
   }
 
+  // Pull just-uploaded products from Shopify (incremental, not the full 6h sync),
+  // then sort newest-first so they appear at the top of the list.
+  async function handleFetchNew() {
+    setFetchingNew(true)
+    setFetchMsg('')
+    try {
+      const res  = await fetch('/api/fetch-new-uploads', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Fetch failed')
+      setFetchMsg(
+        data.newCount
+          ? `✓ ${data.newCount} new upload${data.newCount !== 1 ? 's' : ''} fetched`
+          : '✓ Up to date — no new uploads'
+      )
+      // Surface newest uploads on top (triggers a reload via the sort effect)
+      setPage(1)
+      setSort('created')
+      setOrder('desc')
+    } catch (e) {
+      console.error('Fetch new uploads error:', e)
+      setFetchMsg('⚠ Fetch failed — try again')
+    } finally {
+      setFetchingNew(false)
+      setTimeout(() => setFetchMsg(''), 6000)
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -79,14 +108,23 @@ export default function ProductsPage() {
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <button className="btn-secondary" onClick={handleExport}>
-            <Download size={15} /> Export CSV
-          </button>
-          <button className="btn-secondary" onClick={() => load()}>
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+        <div className="flex items-center gap-3">
+          {fetchMsg && (
+            <span className="text-xs text-slate-500 whitespace-nowrap">{fetchMsg}</span>
+          )}
+          <div className="flex gap-2">
+            <button className="btn-primary" onClick={handleFetchNew} disabled={fetchingNew}>
+              <DownloadCloud size={15} className={fetchingNew ? 'animate-spin' : ''} />
+              {fetchingNew ? 'Fetching…' : 'Fetch new uploads'}
+            </button>
+            <button className="btn-secondary" onClick={handleExport}>
+              <Download size={15} /> Export CSV
+            </button>
+            <button className="btn-secondary" onClick={() => load()}>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
 

@@ -63,6 +63,16 @@ export async function register() {
     // Dynamically import Prisma only inside the async fn so it doesn't break edge builds
     const { default: db } = await import('./lib/db.js')
 
+    // Live column migrations — idempotent (ADD COLUMN IF NOT EXISTS)
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forceDraft" BOOLEAN NOT NULL DEFAULT false`)
+      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forceZero"  BOOLEAN NOT NULL DEFAULT false`)
+      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forcedBy"   TEXT`)
+      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forcedAt"   TIMESTAMP(3)`)
+    } catch (e) {
+      console.warn('[autosync] migration warning:', e.message)
+    }
+
     let needsImmediateSync = false
     try {
       const lastSync = await db.syncLog.findFirst({

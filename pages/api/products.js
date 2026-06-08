@@ -121,7 +121,12 @@ async function handler(req, res) {
   }
 
   // ── Sort ─────────────────────────────────────────────────────────────────────
-  const validSorts = { title: { title: order }, vendor: { vendor: order }, status: { status: order } }
+  const validSorts = {
+    title:   { title:  order },
+    vendor:  { vendor: order },
+    status:  { status: order },
+    created: { createdAtShopify: order },   // newest uploads first when order=desc
+  }
   const orderBy = validSorts[sort] || { title: 'asc' }
 
   // ── Query ────────────────────────────────────────────────────────────────────
