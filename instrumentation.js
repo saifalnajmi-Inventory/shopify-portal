@@ -63,16 +63,6 @@ export async function register() {
     // Dynamically import Prisma only inside the async fn so it doesn't break edge builds
     const { default: db } = await import('./lib/db.js')
 
-    // Live column migrations — idempotent (ADD COLUMN IF NOT EXISTS)
-    try {
-      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forceDraft" BOOLEAN NOT NULL DEFAULT false`)
-      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forceZero"  BOOLEAN NOT NULL DEFAULT false`)
-      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forcedBy"   TEXT`)
-      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forcedAt"   TIMESTAMP(3)`)
-    } catch (e) {
-      console.warn('[autosync] migration warning:', e.message)
-    }
-
     let needsImmediateSync = false
     try {
       const lastSync = await db.syncLog.findFirst({
@@ -102,6 +92,23 @@ export async function register() {
     console.log(`[autosync] scheduler armed — every ${AUTO_SYNC_HOURS}h · baseUrl: ${baseUrl}`)
   }
 
-  // Delay startup to let Prisma connect before the first DB query
+  // Run DB migrations immediately — must happen before any HTTP request can hit
+  // the PosMatch table (columns won't exist in old DB until these run).
+  // The sync check is delayed so Prisma has time to fully connect.
+  async function runMigrations() {
+    const { default: db } = await import('./lib/db.js')
+    try {
+      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forceDraft" BOOLEAN NOT NULL DEFAULT false`)
+      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forceZero"  BOOLEAN NOT NULL DEFAULT false`)
+      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forcedBy"   TEXT`)
+      await db.$executeRawUnsafe(`ALTER TABLE "PosMatch" ADD COLUMN IF NOT EXISTS "forcedAt"   TIMESTAMP(3)`)
+      console.log('[autosync] migrations applied')
+    } catch (e) {
+      console.warn('[autosync] migration warning:', e.message)
+    }
+  }
+
+  // Run migrations right away (no delay), then arm the sync scheduler after warmup
+  runMigrations().catch(e => console.warn('[autosync] migration failed:', e.message))
   setTimeout(init, STARTUP_DELAY_MS)
 }
