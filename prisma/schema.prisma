@@ -344,6 +344,16 @@ model PosMatch {
   confirmedBy      String?
   confirmedAt      DateTime?
 
+  // NOTE: these 4 columns exist in the production DB (added by an earlier
+  // `prisma db push`). They are intentionally kept here — with NO feature code
+  // using them — purely so `prisma db push` (run on every Railway deploy) sees
+  // schema == DB and does not try to DROP them (which crashes the deploy with a
+  // data-loss error). Inert columns; safe to remove later via a controlled migration.
+  forceDraft       Boolean     @default(false)
+  forceZero        Boolean     @default(false)
+  forcedBy         String?
+  forcedAt         DateTime?
+
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 }
