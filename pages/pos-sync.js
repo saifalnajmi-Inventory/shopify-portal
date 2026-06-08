@@ -15,7 +15,6 @@ import {
   RefreshCw, Wifi, WifiOff, Package, Search, X,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Minus,
   ShoppingBag, Server, Link2, CheckSquare, Zap,
-  Lock, LockOpen,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -241,17 +240,12 @@ function LinkModal({ row, onClose, onLinked, autoActivate }) {
 }
 
 // ── Row component ─────────────────────────────────────────────────────────────
-function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelect, onStatusChange, onLinkClick, onActivate, onForce, isOwner, updating }) {
+function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelect, onStatusChange, onLinkClick, onActivate, updating }) {
   const pos   = row.posProduct
   const match = row.variant
-  const isForced = row.forceDraft || row.forceZero
 
   return (
-    <tr className={`border-b border-slate-50 transition-colors group ${
-      isSelected ? 'bg-indigo-50/60' :
-      isForced   ? 'bg-rose-50/20 hover:bg-rose-50/40' :
-      'hover:bg-slate-50/60'
-    }`}>
+    <tr className={`border-b border-slate-50 transition-colors group ${isSelected ? 'bg-indigo-50/60' : 'hover:bg-slate-50/60'}`}>
 
       {/* Checkbox */}
       <td className="px-2 py-3 text-center">
@@ -273,19 +267,8 @@ function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelec
             <Server size={13} className="text-orange-400" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <div className="text-sm font-semibold text-slate-800 leading-snug" title={pos.name}>
-                {pos.name || '—'}
-              </div>
-              {isForced && (
-                <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${
-                  row.forceDraft
-                    ? 'bg-rose-100 text-rose-700 border-rose-300'
-                    : 'bg-orange-100 text-orange-700 border-orange-300'
-                }`}>
-                  <Lock size={8} /> {row.forceDraft ? 'Force Draft' : 'Force Zero'}
-                </span>
-              )}
+            <div className="text-sm font-semibold text-slate-800 leading-snug" title={pos.name}>
+              {pos.name || '—'}
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-[10px] text-slate-400 font-mono">{pos.barcode}</span>
@@ -426,28 +409,6 @@ function ComparisonRow({ row, srNo, showCostAndMargin, isSelected, onToggleSelec
               Reset
             </button>
           )}
-          {/* ── Force locks — owner / super_admin only ── */}
-          {isOwner && row.status === 'confirmed' && row.variant && !row.forceDraft && !row.forceZero && (
-            <button disabled={updating} onClick={() => onForce(row.id, 'force_draft')}
-              title="Lock this product as Draft + zero stock on Shopify — survives every POS sync"
-              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700 border border-rose-200 hover:bg-rose-600 hover:text-white hover:border-rose-600 disabled:opacity-40 transition-colors flex items-center gap-1">
-              <Lock size={9} /> Force Draft
-            </button>
-          )}
-          {isOwner && row.status === 'confirmed' && row.variant && !row.forceZero && !row.forceDraft && (
-            <button disabled={updating} onClick={() => onForce(row.id, 'force_zero')}
-              title="Lock inventory at 0 on Shopify — survives every POS sync (product stays visible)"
-              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-600 hover:text-white hover:border-orange-600 disabled:opacity-40 transition-colors flex items-center gap-1">
-              <Lock size={9} /> Force Zero
-            </button>
-          )}
-          {isOwner && isForced && (
-            <button disabled={updating} onClick={() => onForce(row.id, 'unforce')}
-              title="Remove force lock — product will sync normally again"
-              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 disabled:opacity-40 transition-colors flex items-center gap-1">
-              <LockOpen size={9} /> Unforce
-            </button>
-          )}
         </div>
       </td>
     </tr>
@@ -576,22 +537,6 @@ export default function PosSyncPage() {
     setBulkUpdating(false)
   }
 
-  // Force draft / force zero / unforce (owner + super_admin only)
-  async function handleForce(matchId, action) {
-    setUpdating(true)
-    try {
-      const r = await fetch('/api/pos/update-match', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ matchId, action }),
-      })
-      const d = await r.json()
-      if (d.ok) await loadTable()
-      else alert(d.error || 'Action failed')
-    } catch (e) { alert(e.message) }
-    setUpdating(false)
-  }
-
   // Activate a draft Shopify product (for already-confirmed rows)
   async function handleActivate(matchId) {
     setUpdating(true)
@@ -626,8 +571,6 @@ export default function PosSyncPage() {
 
   // Super admin sees cost price + margin; owner sees everything else
   const showCostAndMargin = user.role === 'super_admin'
-  // Both owner and super_admin can set force locks
-  const isOwner = user.role === 'owner' || user.role === 'super_admin'
   // Total visible columns for colspan / skeleton
   const colCount = showCostAndMargin ? 12 : 10
 
@@ -1011,8 +954,6 @@ export default function PosSyncPage() {
                   onStatusChange={handleStatusChange}
                   onLinkClick={setLinkRow}
                   onActivate={handleActivate}
-                  onForce={handleForce}
-                  isOwner={isOwner}
                   updating={updating}
                 />
               ))}

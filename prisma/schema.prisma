@@ -344,14 +344,6 @@ model PosMatch {
   confirmedBy      String?
   confirmedAt      DateTime?
 
-  // Owner-only force locks — survive every POS sync cycle
-  // forceDraft: product stays draft + inventory stays 0 on Shopify no matter what POS reports
-  // forceZero:  inventory stays 0 on Shopify no matter what POS reports (product status unchanged)
-  forceDraft       Boolean     @default(false)
-  forceZero        Boolean     @default(false)
-  forcedBy         String?
-  forcedAt         DateTime?
-
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 }

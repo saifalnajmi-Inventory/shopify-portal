@@ -92,7 +92,6 @@ export async function register() {
     console.log(`[autosync] scheduler armed — every ${AUTO_SYNC_HOURS}h · baseUrl: ${baseUrl}`)
   }
 
-  // Arm the sync scheduler after warmup — prisma db push (in start script) already
-  // ensures the DB schema is in sync before this process starts accepting requests.
+  // Delay startup to let Prisma connect before the first DB query
   setTimeout(init, STARTUP_DELAY_MS)
 }
