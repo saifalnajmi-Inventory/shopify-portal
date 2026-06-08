@@ -230,17 +230,23 @@ async function pushConfirmedStockChanges(products) {
         shopifyStock:  estimatedShopifyStock,
       }
 
-      // Auto-activate draft product when POS stock goes from 0 to > 0
+      // Auto-activate draft product when POS stock goes from 0 to > 0.
+      // Also sets published_at so the product is visible on the storefront —
+      // status:'active' alone is NOT enough if published_at is null.
       if (newPosTotal > 0 && oldPosTotal === 0 && match.variant.product?.status === 'draft') {
         try {
-          await updateProduct(match.variant.product.id, { status: 'active' })
+          const now = new Date().toISOString()
+          await updateProduct(match.variant.product.id, {
+            status:       'active',
+            published_at: now,           // ← required for storefront visibility
+          })
           await db.product.update({
             where: { id: match.variant.product.id },
-            data:  { status: 'active' },
+            data:  { status: 'active', publishedAt: new Date(now) },
           })
           matchUpdate.shopifyStatus = 'active'
           activated++
-          console.log(`[POS SYNC PUSH] Auto-activated ${match.variant.product.id}`)
+          console.log(`[POS SYNC PUSH] Auto-activated + published ${match.variant.product.id}`)
         } catch (ae) {
           console.error(`[POS SYNC PUSH] Auto-activate failed:`, ae.message)
         }
