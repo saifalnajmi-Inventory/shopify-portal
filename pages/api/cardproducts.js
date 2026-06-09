@@ -6,8 +6,8 @@
  */
 
 import db from '../../lib/db'
-import { subDays } from 'date-fns'
 import { withAuth } from '../../lib/auth'
+import { buildCardQuery } from '../../lib/cardQueries'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT     = 500
@@ -32,31 +32,8 @@ async function handler(req, res) {
     restockRule: true,   // join so each variant knows if a rule exists
   }
 
-  // ── WHERE clause + orderBy per card ───────────────────────────────────────────
-  const CARDS = {
-    outOfStock:      { where: { inventoryQuantity: { lte: 0 } },                                              orderBy: { sold30Days: 'desc' } },
-    lowStock:        { where: { inventoryQuantity: { gt: 0, lt: 3 } },                                        orderBy: { inventoryQuantity: 'asc' } },
-    belowThreshold:  { where: { inventoryQuantity: { gt: 0, lt: thresh } },                                   orderBy: { inventoryQuantity: 'asc' } },
-    inStock:         { where: { inventoryQuantity: { gt: 0 } },                                               orderBy: { sold30Days: 'desc' } },
-    oos7:            { where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { not: null, lte: subDays(new Date(), 7)  } }, orderBy: { firstOutOfStockAt: 'asc' } },
-    oos14:           { where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { not: null, lte: subDays(new Date(), 14) } }, orderBy: { firstOutOfStockAt: 'asc' } },
-    oos30:           { where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { not: null, lte: subDays(new Date(), 30) } }, orderBy: { firstOutOfStockAt: 'asc' } },
-    noSales:         { where: { totalSold: 0 },                                                               orderBy: { inventoryQuantity: 'desc' } },
-    recent:          { where: { product: { createdAtShopify: { gte: subDays(new Date(), 30) } } },            orderBy: { product: { createdAtShopify: 'desc' } } },
-    missingImages:   { where: { product: { imageCount: 0 } },                                                 orderBy: { sold30Days: 'desc' } },
-    missingSeo:      { where: { product: { OR: [{ seoTitle: null }, { seoTitle: '' }, { seoDescription: null }, { seoDescription: '' }] } }, orderBy: { sold30Days: 'desc' } },
-    missingVendor:   { where: { product: { OR: [{ vendor: null }, { vendor: '' }] } },                        orderBy: { sold30Days: 'desc' } },
-    neverRestocked:  { where: { inventoryQuantity: { lte: 0 }, totalSold: { gt: 0 }, firstOutOfStockAt: { not: null } }, orderBy: { sold30Days: 'desc' } },
-    draftProducts:   { where: { product: { status: 'draft' } },                                               orderBy: { sold30Days: 'desc' } },
-    activeProducts:  { where: { product: { status: 'active' } },                                              orderBy: { sold30Days: 'desc' } },
-    archivedProducts:{ where: { product: { status: 'archived' } },                                            orderBy: { sold30Days: 'desc' } },
-    // Went OOS buckets
-    wentOosLast30:   { where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { gte: subDays(new Date(), 30) } },                                           orderBy: { firstOutOfStockAt: 'desc' } },
-    wentOos31to60:   { where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { gte: subDays(new Date(), 60), lt: subDays(new Date(), 30) } },              orderBy: { firstOutOfStockAt: 'desc' } },
-    wentOos61to90:   { where: { inventoryQuantity: { lte: 0 }, firstOutOfStockAt: { gte: subDays(new Date(), 90), lt: subDays(new Date(), 60) } },              orderBy: { firstOutOfStockAt: 'desc' } },
-  }
-
-  const def = CARDS[card]
+  // ── WHERE clause + orderBy per card (shared with /api/export-card) ────────────
+  const def = buildCardQuery(card, thresh)
   if (!def) return res.status(400).json({ error: `Unknown card: ${card}` })
 
   try {

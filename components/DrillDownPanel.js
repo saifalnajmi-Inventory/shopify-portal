@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, RefreshCw, Package, Send, Loader2, CheckCircle2, XCircle,
-         Eye, EyeOff, Archive, Zap } from 'lucide-react'
+         Eye, EyeOff, Archive, Zap, Download } from 'lucide-react'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 
@@ -74,6 +74,23 @@ export default function DrillDownPanel({ card, title, onClose, onRefreshDashboar
     }
   }
 
+  // Export the full list (server pulls ALL matching rows, not just the loaded page)
+  // as a real .xlsx file. Same filter as the modal — guaranteed to match.
+  function exportExcel() {
+    if (!card || total === 0) return
+    const params = new URLSearchParams({ card })
+    if (title) params.set('title', title)
+    const url = `/api/export-card?${params.toString()}`
+    // Anchor click (instead of window.open) so no blank tab is left behind
+    const a = document.createElement('a')
+    a.href = url
+    a.rel  = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    toast.success('Preparing Excel download…')
+  }
+
   useEffect(() => { load() }, [card])  // eslint-disable-line
 
   const showing = items.length
@@ -91,6 +108,14 @@ export default function DrillDownPanel({ card, title, onClose, onRefreshDashboar
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="Export this list to Excel (.xlsx)"
+              disabled={loading || total === 0}
+              onClick={exportExcel}
+            >
+              <Download size={14} /> Excel
+            </button>
             <button className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" onClick={() => load()}>
               <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
             </button>
