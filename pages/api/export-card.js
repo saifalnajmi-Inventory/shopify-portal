@@ -10,7 +10,6 @@
 
 import db from '../../lib/db'
 import { withAuth } from '../../lib/auth'
-import { differenceInDays } from 'date-fns'
 import * as XLSX from 'xlsx'
 import { buildCardQuery } from '../../lib/cardQueries'
 
@@ -44,14 +43,9 @@ async function handler(req, res) {
       'Status':             v.product?.status || '',
       'Stock Qty':          v.inventoryQuantity,
       'Total Sold':         v.totalSold,
-      'Sold 30 Days':       v.sold30Days,
-      'Sold 7 Days':        v.sold7Days,
-      'Days Out of Stock':  v.firstOutOfStockAt ? differenceInDays(now, new Date(v.firstOutOfStockAt)) : '',
       'Out of Stock Since': v.firstOutOfStockAt ? new Date(v.firstOutOfStockAt).toISOString().slice(0, 10) : '',
       'Price (KD)':         v.price,
       'Vendor':             v.product?.vendor || '',
-      'Product ID':         v.product?.id || '',
-      'Variant ID':         v.id,
     }))
 
     // Build the workbook (header row even when empty so the file is valid)
@@ -60,8 +54,7 @@ async function handler(req, res) {
     )
     ws['!cols'] = [
       { wch: 4 }, { wch: 46 }, { wch: 18 }, { wch: 18 }, { wch: 9 },
-      { wch: 9 }, { wch: 10 }, { wch: 12 }, { wch: 11 }, { wch: 16 },
-      { wch: 18 }, { wch: 10 }, { wch: 18 }, { wch: 16 }, { wch: 16 },
+      { wch: 9 }, { wch: 10 }, { wch: 18 }, { wch: 10 }, { wch: 18 },
     ]
 
     const labelRaw  = (title || card || 'export').toString()
