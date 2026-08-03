@@ -180,18 +180,21 @@ export default function NotificationsPage() {
       const res  = await fetch('/api/admin/dedupe-notifications')
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || 'Check failed'); return }
-      if (!data.toDelete) { toast.success('No duplicate notifications found'); return }
+      if (!data.toDelete && !data.staleCount) { toast.success('Nothing to clean up'); return }
+
+      const parts = []
+      if (data.toDelete)   parts.push(`${data.toDelete} duplicate notification${data.toDelete > 1 ? 's' : ''} across ${data.duplicateGroups} product${data.duplicateGroups > 1 ? 's' : ''}`)
+      if (data.staleCount) parts.push(`${data.staleCount} stale alert${data.staleCount > 1 ? 's' : ''} for products that are no longer actually out of stock`)
 
       const ok = window.confirm(
-        `Found ${data.toDelete} duplicate notification${data.toDelete > 1 ? 's' : ''} ` +
-        `across ${data.duplicateGroups} product${data.duplicateGroups > 1 ? 's' : ''}.\n\n` +
-        `Delete the extra copies? One notification per event is kept. This cannot be undone.`
+        `Found:\n- ${parts.join('\n- ')}\n\n` +
+        `Delete duplicates (one kept per event) and resolve the stale alerts? This cannot be undone.`
       )
       if (!ok) return
 
       const res2  = await fetch('/api/admin/dedupe-notifications', { method: 'POST' })
       const data2 = await res2.json()
-      if (data2.ok) { toast.success(`Deleted ${data2.deleted} duplicate notifications`); load() }
+      if (data2.ok) { toast.success(`Deleted ${data2.deleted} duplicates, resolved ${data2.resolved} stale alerts`); load() }
       else          { toast.error(data2.error || 'Cleanup failed') }
     } catch (err) {
       toast.error(err.message)

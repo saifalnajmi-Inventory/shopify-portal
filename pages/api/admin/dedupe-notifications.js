@@ -1,13 +1,18 @@
 /**
- * GET  /api/admin/dedupe-notifications  — dry-run: count duplicate OOS notifications
- * POST /api/admin/dedupe-notifications  — delete the duplicates, keep one per event
+ * GET  /api/admin/dedupe-notifications  — dry-run: duplicates + stale (already-restocked) alerts
+ * POST /api/admin/dedupe-notifications  — delete duplicates, resolve stale alerts
  *
- * One-off cleanup for the restockEngine.js bug that fired the OOS notification
- * twice per event (fixed — see lib/restockEngine.js). Safe to remove once run.
- *
- * A duplicate pair = same productId + sku + oldValue + newValue + type='oos',
- * created within 10 seconds of each other. Keeps the more "progressed" one
- * (resolved > read > unread), deletes the rest.
+ * Two cleanups in one pass:
+ *  1. Duplicates — restockEngine.js used to fire the OOS notification twice per
+ *     event (fixed). Same productId + sku + oldValue + newValue + type='oos',
+ *     created within 10s of each other. Keeps the more "progressed" one
+ *     (resolved > read > unread), deletes the rest.
+ *  2. Stale alerts — an open oos/low_stock notification whose product/variant
+ *     is no longer actually out-of-stock/low in the DB (e.g. the auto-resolve-
+ *     on-restock transition already fired before it existed, or a sync
+ *     silently updated the number without a notification ever closing the
+ *     loop). Matched via productId + variantName (same expression used when
+ *     the alert was created — sku is often empty and unreliable to match on).
  */
 import { withAuth } from '../../../lib/auth'
 import db from '../../../lib/db'
@@ -38,26 +43,72 @@ async function findDuplicateGroups() {
   return { total: notifications.length, dupGroups: groups.filter(g => g.items.length > 1) }
 }
 
+async function findStaleAlerts() {
+  const openAlerts = await db.notification.findMany({
+    where: { type: { in: ['oos', 'low_stock'] }, status: { not: 'resolved' } },
+  })
+  if (!openAlerts.length) return []
+
+  const productIds = [...new Set(openAlerts.map(n => n.productId).filter(Boolean))]
+  const variants = await db.variant.findMany({
+    where:  { productId: { in: productIds } },
+    select: { productId: true, title: true, inventoryQuantity: true },
+  })
+
+  const settingRows     = await db.globalSetting.findMany()
+  const globalSettings  = Object.fromEntries(settingRows.map(r => [r.key, r.value]))
+  const globalThreshold = parseInt(globalSettings.restock_threshold || '10', 10)
+
+  const stale = []
+  for (const n of openAlerts) {
+    const v = variants.find(v =>
+      v.productId === n.productId &&
+      (v.title !== 'Default Title' ? v.title : null) === n.variantName
+    )
+    if (!v) continue // no matching variant found — leave alone, don't guess
+
+    const stillApplies = n.type === 'oos'
+      ? v.inventoryQuantity <= 0
+      : v.inventoryQuantity < globalThreshold
+
+    if (!stillApplies) stale.push(n)
+  }
+  return stale
+}
+
 async function handler(req, res) {
   const ctx = logger.fromReq(req)
 
   if (req.method === 'GET') {
-    const { total, dupGroups } = await findDuplicateGroups()
+    const [{ total, dupGroups }, staleAlerts] = await Promise.all([
+      findDuplicateGroups(),
+      findStaleAlerts(),
+    ])
     const toDelete = dupGroups.reduce((sum, g) => sum + (g.items.length - 1), 0)
+
     return res.status(200).json({
       total,
       duplicateGroups: dupGroups.length,
       toDelete,
+      staleCount: staleAlerts.length,
       sample: dupGroups.slice(0, 8).map(g => ({
         product: g.items[0].productName || g.key,
         copies:  g.items.length,
         statuses: g.items.map(i => i.status),
       })),
+      staleSample: staleAlerts.slice(0, 8).map(n => ({
+        product: n.productName || n.productId,
+        type:    n.type,
+        stock:   n.newValue,
+      })),
     })
   }
 
   if (req.method === 'POST') {
-    const { dupGroups } = await findDuplicateGroups()
+    const [{ dupGroups }, staleAlerts] = await Promise.all([
+      findDuplicateGroups(),
+      findStaleAlerts(),
+    ])
     const toDelete = []
 
     for (const g of dupGroups) {
@@ -76,11 +127,20 @@ async function handler(req, res) {
       deleted = result.count
     }
 
-    logger.info('api/admin/dedupe-notifications', 'duplicates_deleted', `Deleted ${deleted} duplicate OOS notifications`, {
-      ...ctx, deleted, groups: dupGroups.length,
+    let resolved = 0
+    if (staleAlerts.length) {
+      const result = await db.notification.updateMany({
+        where: { id: { in: staleAlerts.map(n => n.id) } },
+        data:  { status: 'resolved', resolvedAt: new Date(), resolvedBy: 'system:reconcile' },
+      })
+      resolved = result.count
+    }
+
+    logger.info('api/admin/dedupe-notifications', 'cleanup_run', `Deleted ${deleted} duplicates, resolved ${resolved} stale alerts`, {
+      ...ctx, deleted, resolved, groups: dupGroups.length,
     })
 
-    return res.status(200).json({ ok: true, deleted })
+    return res.status(200).json({ ok: true, deleted, resolved })
   }
 
   res.status(405).end()
