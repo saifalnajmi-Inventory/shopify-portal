@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Bell, CheckCircle2, XCircle, AlertTriangle, Info,
   RefreshCw, Trash2, MailOpen, Filter, Download,
-  PackagePlus, Send,
+  PackagePlus, Send, Layers,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { formatDistanceToNow } from 'date-fns'
@@ -49,6 +49,7 @@ export default function NotificationsPage() {
   const [filterSeverity,setFilterSeverity]= useState('')
   // Stock update state: { [notifId]: { qty: string, pushing: bool, open: bool } }
   const [stockUpdates,  setStockUpdates]  = useState({})
+  const [dedupeBusy,    setDedupeBusy]    = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -173,6 +174,32 @@ export default function NotificationsPage() {
     }
   }
 
+  async function cleanupDuplicates() {
+    setDedupeBusy(true)
+    try {
+      const res  = await fetch('/api/admin/dedupe-notifications')
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Check failed'); return }
+      if (!data.toDelete) { toast.success('No duplicate notifications found'); return }
+
+      const ok = window.confirm(
+        `Found ${data.toDelete} duplicate notification${data.toDelete > 1 ? 's' : ''} ` +
+        `across ${data.duplicateGroups} product${data.duplicateGroups > 1 ? 's' : ''}.\n\n` +
+        `Delete the extra copies? One notification per event is kept. This cannot be undone.`
+      )
+      if (!ok) return
+
+      const res2  = await fetch('/api/admin/dedupe-notifications', { method: 'POST' })
+      const data2 = await res2.json()
+      if (data2.ok) { toast.success(`Deleted ${data2.deleted} duplicate notifications`); load() }
+      else          { toast.error(data2.error || 'Cleanup failed') }
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setDedupeBusy(false)
+    }
+  }
+
   function exportCSV() {
     const rows = [
       ['ID','Type','Severity','Product','SKU','Message','Old Value','New Value','Status','Created'],
@@ -219,6 +246,9 @@ export default function NotificationsPage() {
           )}
           <button className="btn-secondary text-xs py-1.5 px-3" onClick={deleteResolved}>
             <Trash2 size={13} /> Clear resolved
+          </button>
+          <button className="btn-secondary text-xs py-1.5 px-3" onClick={cleanupDuplicates} disabled={dedupeBusy}>
+            <Layers size={13} className={dedupeBusy ? 'animate-pulse' : ''} /> Clean Duplicates
           </button>
           <button className="btn-secondary text-xs py-1.5 px-3" onClick={exportCSV}>
             <Download size={13} /> Export CSV
