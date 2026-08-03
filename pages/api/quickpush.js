@@ -67,9 +67,14 @@ async function handler(req, res) {
     if (fieldName === 'inventory_quantity') {
       const variant = await db.variant.findUnique({
         where:   { id: variantId },
-        include: { inventoryLevels: true },          // ALL locations, not just first
+        include: {
+          inventoryLevels: true,                      // ALL locations, not just first
+          product: { select: { id: true, status: true } },
+        },
       })
       if (!variant?.inventoryItemId) throw new Error('Variant not found — sync first.')
+
+      const previousQty = variant.inventoryQuantity ?? 0
 
       // Collect all location IDs we have in the DB
       let locationIds = (variant.inventoryLevels || []).map(l => l.locationId).filter(Boolean)
@@ -99,6 +104,18 @@ async function handler(req, res) {
         where: { id: variantId },
         data: { inventoryQuantity: newQty, firstOutOfStockAt: newQty === 0 ? new Date() : null },
       })
+
+      // Restocked from 0 — reactivate the product on Shopify so it's sellable again
+      if (previousQty <= 0 && newQty > 0 && variant.product?.id && variant.product.status !== 'active') {
+        try {
+          await updateProduct(variant.product.id, { status: 'active' })
+          await db.product.update({ where: { id: variant.product.id }, data: { status: 'active' } })
+        } catch (e) {
+          logger.error('api/quickpush', 'reactivate_failed', 'Auto-reactivate on restock failed', {
+            ...ctx, productId: variant.product.id, error: e,
+          })
+        }
+      }
 
     } else if (PRODUCT_FIELDS.has(fieldName)) {
       const resp = await updateProduct(productId, { [fieldName]: afterValue })
